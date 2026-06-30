@@ -1,0 +1,88 @@
+{
+  "projectId": "demo-project",
+  "name": "样例纪录片采访",
+  "assets": [
+    {
+      "assetId": "interview-01",
+      "fileName": "interview_01.mp4",
+      "duration": 210,
+      "language": "zh"
+    }
+  ],
+  "speakers": [
+    {
+      "speakerId": "spk_1",
+      "name": "受访者 A"
+    },
+    {
+      "speakerId": "spk_2",
+      "name": "导演"
+    }
+  ],
+  "segments": [
+    {
+      "id": "seg_001",
+      "assetId": "interview-01",
+      "speakerId": "spk_2",
+      "start": 1.2,
+      "end": 5.3,
+      "text": "我们先从那一天开始说，你第一次意识到这件事不对劲是什么时候？"
+    },
+    {
+      "id": "seg_002",
+      "assetId": "interview-01",
+      "speakerId": "spk_1",
+      "start": 5.4,
+      "end": 11.8,
+      "text": "其实就是在那个傍晚，我看到所有人都沉默了，空气里有一种说不出来的紧张。"
+    },
+    {
+      "id": "seg_003",
+      "assetId": "interview-01",
+      "speakerId": "spk_1",
+      "start": 12.1,
+      "end": 18.6,
+      "text": "那时候我第一次意识到，这件事不是一个人的问题，而是我们这一代人共同面对的困境。"
+    },
+    {
+      "id": "seg_004",
+      "assetId": "interview-01",
+      "speakerId": "spk_2",
+      "start": 19,
+      "end": 23.4,
+      "text": "你刚才说共同的困境，能不能再具体一点？"
+    },
+    {
+      "id": "seg_005",
+      "assetId": "interview-01",
+      "speakerId": "spk_1",
+      "start": 23.8,
+      "end": 31.6,
+      "text": "具体来说，就是每个人都想保持体面，可是生活总是在逼你承认，体面有时候只是一个壳。"
+    },
+    {
+      "id": "seg_006",
+      "assetId": "interview-01",
+      "speakerId": "spk_1",
+      "start": 32,
+      "end": 39.4,
+      "text": "我后来一直记得那个画面，因为它像一个开关，把我从原来的生活里推了出来。"
+    },
+    {
+      "id": "seg_007",
+      "assetId": "interview-01",
+      "speakerId": "spk_2",
+      "start": 40.2,
+      "end": 44,
+      "text": "如果这段放在片子开头，你希望观众先感受到什么？"
+    },
+    {
+      "id": "seg_008",
+      "assetId": "interview-01",
+      "speakerId": "spk_1",
+      "start": 44.4,
+      "end": 52,
+      "text": "我希望他们先不要急着判断，只是跟着我们回到那个现场，听见沉默本身。"
+    }
+  ]
+}
