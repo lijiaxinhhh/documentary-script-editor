@@ -17,6 +17,7 @@ type TopBarProps = {
   onRestoreRecent: () => void;
   onExport: (type: ExportType) => void;
   onOpenTranscription: () => void;
+  onWorkflowStep: (step: WorkflowStep) => void;
 };
 
 export type ExportType =
@@ -30,6 +31,8 @@ export type ExportType =
   | "davinci-edl"
   | "jianying"
   | "nle-guide";
+
+export type WorkflowStep = "assets" | "transcription" | "selection" | "storyboard" | "export";
 
 export function TopBar({
   projectName,
@@ -46,7 +49,8 @@ export function TopBar({
   onLoadDemo,
   onRestoreRecent,
   onExport,
-  onOpenTranscription
+  onOpenTranscription,
+  onWorkflowStep
 }: TopBarProps) {
   const videoInputRef = useRef<HTMLInputElement>(null);
   const jsonInputRef = useRef<HTMLInputElement>(null);
@@ -96,31 +100,35 @@ export function TopBar({
       </div>
 
       <div className="workflow-strip" aria-label="工作流程">
-        <span className={`workflow-chip ${assetCount ? "ready" : ""}`}>
+        <button type="button" className={`workflow-chip ${assetCount ? "ready" : ""}`} onClick={() => onWorkflowStep("assets")}>
           <b>1</b>
           <span>素材</span>
           <small>{assetCount} 个</small>
-        </span>
-        <span className={`workflow-chip ${segmentCount ? "ready" : transcriptionReady ? "armed" : ""}`}>
+        </button>
+        <button
+          type="button"
+          className={`workflow-chip ${segmentCount ? "ready" : transcriptionReady ? "armed" : ""}`}
+          onClick={() => onWorkflowStep("transcription")}
+        >
           <b>2</b>
           <span>转写</span>
           <small>{segmentCount ? `${segmentCount} 段` : transcriptionProviderLabel}</small>
-        </span>
-        <span className={`workflow-chip ${highlightCount ? "ready" : ""}`}>
+        </button>
+        <button type="button" className={`workflow-chip ${highlightCount ? "ready" : ""}`} onClick={() => onWorkflowStep("selection")}>
           <b>3</b>
           <span>选段</span>
           <small>{highlightCount} 条</small>
-        </span>
-        <span className={`workflow-chip ${storyGroupCount > 1 ? "ready" : ""}`}>
+        </button>
+        <button type="button" className={`workflow-chip ${storyGroupCount > 1 ? "ready" : ""}`} onClick={() => onWorkflowStep("storyboard")}>
           <b>4</b>
           <span>故事版</span>
           <small>{storyGroupCount} 栏</small>
-        </span>
-        <span className={`workflow-chip ${highlightCount ? "armed" : ""}`}>
+        </button>
+        <button type="button" className={`workflow-chip ${highlightCount ? "armed" : ""}`} onClick={() => onWorkflowStep("export")}>
           <b>5</b>
           <span>导出</span>
           <small>FCP / PR / 达芬奇 / 剪映</small>
-        </span>
+        </button>
       </div>
 
       <nav className="topbar-actions" aria-label="主工具栏">

@@ -71,6 +71,21 @@ test("mobile layout does not overflow horizontally", async ({ page }) => {
   await expect(page.getByRole("button", { name: "载入样例" })).toBeVisible();
 });
 
+test("workflow stepper opens and highlights matching work areas", async ({ page }) => {
+  await page.goto("/");
+
+  await page.locator(".workflow-chip").nth(1).click();
+  await expect(page.getByRole("complementary", { name: "视频转文字与 Key 设置" })).toBeVisible();
+  await expect(page.locator(".transcription-panel")).toHaveClass(/workflow-target-pulse/);
+  await page.getByRole("button", { name: "关闭" }).click();
+
+  await page.locator(".workflow-chip").nth(3).click();
+  await expect(page.locator(".storyboard-panel")).toHaveClass(/workflow-target-pulse/);
+
+  await page.locator(".workflow-chip").nth(4).click();
+  await expect(page.getByLabel("导出")).toBeFocused();
+});
+
 test("restored local project prompts for video relink", async ({ page }) => {
   await page.goto("/");
 

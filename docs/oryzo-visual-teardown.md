@@ -56,3 +56,4 @@ If a future round wants a faithful technical study, use the private learning wor
 - Added persistent local/privacy chips under the project title.
 - Added visible export-format rail in the main workflow callout.
 - Added Oryzo-inspired but original material cues: restrained grid, warm/cyan status accents, video monitor frame, storyboard template hint.
+- Added interaction reconstruction: clickable workflow stepper, target panel pulse, transcription drawer entrance, export focus handoff, tactile hover states.

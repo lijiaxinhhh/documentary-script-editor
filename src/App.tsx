@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { AssetSidebar } from "./components/AssetSidebar";
 import { FeedbackPanel } from "./components/FeedbackPanel";
 import { StoryboardCanvas } from "./components/StoryboardCanvas";
-import { TopBar, type ExportType } from "./components/TopBar";
+import { TopBar, type ExportType, type WorkflowStep } from "./components/TopBar";
 import { TranscriptionPanel, type TranscriptionSettings } from "./components/TranscriptionPanel";
 import { TranscriptPane } from "./components/TranscriptPane";
 import { VideoPane } from "./components/VideoPane";
@@ -670,6 +670,25 @@ export default function App() {
     }
   }
 
+  function handleWorkflowStep(step: WorkflowStep) {
+    if (step === "transcription") {
+      setTranscriptionOpen(true);
+      window.setTimeout(() => focusWorkflowTarget(".transcription-panel", ".transcription-panel select, .transcription-panel input"), 80);
+      return;
+    }
+    if (step === "export") {
+      focusWorkflowTarget(".export-group", ".export-group select");
+      return;
+    }
+
+    const targetMap: Record<Exclude<WorkflowStep, "transcription" | "export">, string> = {
+      assets: ".sidebar",
+      selection: ".transcript-pane",
+      storyboard: ".storyboard-panel"
+    };
+    focusWorkflowTarget(targetMap[step]);
+  }
+
   return (
     <div className="app-shell">
       <TopBar
@@ -688,6 +707,7 @@ export default function App() {
         onRestoreRecent={restoreRecentProject}
         onExport={handleExport}
         onOpenTranscription={() => setTranscriptionOpen(true)}
+        onWorkflowStep={handleWorkflowStep}
       />
       <TranscriptionPanel
         open={transcriptionOpen}
@@ -819,6 +839,23 @@ export default function App() {
       />
     </div>
   );
+}
+
+function focusWorkflowTarget(selector: string, focusSelector?: string) {
+  const target = document.querySelector<HTMLElement>(selector);
+  if (!target) return;
+
+  target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
+  target.classList.remove("workflow-target-pulse");
+  window.requestAnimationFrame(() => {
+    target.classList.add("workflow-target-pulse");
+    window.setTimeout(() => target.classList.remove("workflow-target-pulse"), 1200);
+  });
+
+  const focusTarget = focusSelector
+    ? (target.querySelector<HTMLElement>(focusSelector) ?? document.querySelector<HTMLElement>(focusSelector))
+    : undefined;
+  focusTarget?.focus({ preventScroll: true });
 }
 
 function ensureHighlight(project: Project, segmentId: string): { project: Project; highlight: Highlight } {
