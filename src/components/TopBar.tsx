@@ -1,24 +1,16 @@
-import { Download, FileJson, Film, FlaskConical, History, KeyRound } from "lucide-react";
-import { useRef, useState } from "react";
-
-type TopBarProps = {
-  projectName: string;
-  assetCount: number;
-  segmentCount: number;
-  highlightCount: number;
-  storyGroupCount: number;
-  transcriptionProviderLabel: string;
-  transcriptionReady: boolean;
-  hasRecentProject: boolean;
-  onProjectNameChange: (name: string) => void;
-  onVideoFile: (file: File) => void;
-  onJsonFile: (file: File) => void;
-  onLoadDemo: () => void;
-  onRestoreRecent: () => void;
-  onExport: (type: ExportType) => void;
-  onOpenTranscription: () => void;
-  onWorkflowStep: (step: WorkflowStep) => void;
-};
+import {
+  Captions,
+  Download,
+  FileJson,
+  FileVideo2,
+  FolderClock,
+  MessageSquareText,
+  PanelBottomOpen,
+  Search,
+  Settings,
+  Upload
+} from "lucide-react";
+import { useRef } from "react";
 
 export type ExportType =
   | "project"
@@ -32,155 +24,116 @@ export type ExportType =
   | "jianying"
   | "nle-guide";
 
-export type WorkflowStep = "assets" | "transcription" | "selection" | "storyboard" | "export";
+type TopBarProps = {
+  projectName: string;
+  assetCount: number;
+  segmentCount: number;
+  highlightCount: number;
+  transcriptionReady: boolean;
+  hasRecentProject: boolean;
+  exportReady: boolean;
+  onProjectNameChange: (name: string) => void;
+  onVideoFile: (file: File) => void;
+  onJsonFile: (file: File) => void;
+  onLoadDemo: () => void;
+  onRestoreRecent: () => void;
+  onOpenTranscription: () => void;
+  onSearchFocus: () => void;
+  onOpenStory: () => void;
+  onOpenExport: () => void;
+  onOpenFeedback: () => void;
+};
 
 export function TopBar({
   projectName,
   assetCount,
   segmentCount,
   highlightCount,
-  storyGroupCount,
-  transcriptionProviderLabel,
   transcriptionReady,
   hasRecentProject,
+  exportReady,
   onProjectNameChange,
   onVideoFile,
   onJsonFile,
   onLoadDemo,
   onRestoreRecent,
-  onExport,
   onOpenTranscription,
-  onWorkflowStep
+  onSearchFocus,
+  onOpenStory,
+  onOpenExport,
+  onOpenFeedback
 }: TopBarProps) {
-  const videoInputRef = useRef<HTMLInputElement>(null);
-  const jsonInputRef = useRef<HTMLInputElement>(null);
-  const [editingTitle, setEditingTitle] = useState(false);
-  const [draftTitle, setDraftTitle] = useState(projectName);
-  const transcriptionButtonLabel = assetCount > 0 && segmentCount === 0 ? "开始转写 / Key" : "视频转文字 / Key";
+  const videoInputRef = useRef<HTMLInputElement | null>(null);
+  const jsonInputRef = useRef<HTMLInputElement | null>(null);
 
   return (
-    <header className="topbar">
-      <div className="project-title">
-        <span className="app-mark">本地纪录片工作台</span>
-        {editingTitle ? (
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              onProjectNameChange(draftTitle.trim() || "未命名纪录片项目");
-              setEditingTitle(false);
-            }}
-          >
-            <input
-              value={draftTitle}
-              onChange={(event) => setDraftTitle(event.target.value)}
-              autoFocus
-              onBlur={() => {
-                onProjectNameChange(draftTitle.trim() || "未命名纪录片项目");
-                setEditingTitle(false);
-              }}
-            />
-          </form>
-        ) : (
-          <button
-            className="title-button"
-            type="button"
-            onClick={() => {
-              setDraftTitle(projectName);
-              setEditingTitle(true);
-            }}
-          >
-            {projectName}
-          </button>
-        )}
-        <div className="project-status-row" aria-label="隐私与本地状态">
-          <span>本地优先</span>
-          <span>素材不上云</span>
-          <span>Key 存本机</span>
+    <header className="top-command-bar">
+      <div className="project-identity">
+        <span className="brand-mark" aria-hidden="true" />
+        <div>
+          <span className="brand-label">本地纪录片工作台</span>
+          <input
+            aria-label="项目名称"
+            value={projectName}
+            onChange={(event) => onProjectNameChange(event.target.value)}
+          />
         </div>
       </div>
 
-      <div className="workflow-strip" aria-label="工作流程">
-        <button type="button" className={`workflow-chip ${assetCount ? "ready" : ""}`} onClick={() => onWorkflowStep("assets")}>
-          <b>1</b>
-          <span>素材</span>
-          <small>{assetCount} 个</small>
-        </button>
-        <button
-          type="button"
-          className={`workflow-chip ${segmentCount ? "ready" : transcriptionReady ? "armed" : ""}`}
-          onClick={() => onWorkflowStep("transcription")}
-        >
-          <b>2</b>
-          <span>转写</span>
-          <small>{segmentCount ? `${segmentCount} 段` : transcriptionProviderLabel}</small>
-        </button>
-        <button type="button" className={`workflow-chip ${highlightCount ? "ready" : ""}`} onClick={() => onWorkflowStep("selection")}>
-          <b>3</b>
-          <span>选段</span>
-          <small>{highlightCount} 条</small>
-        </button>
-        <button type="button" className={`workflow-chip ${storyGroupCount > 1 ? "ready" : ""}`} onClick={() => onWorkflowStep("storyboard")}>
-          <b>4</b>
-          <span>故事版</span>
-          <small>{storyGroupCount} 栏</small>
-        </button>
-        <button type="button" className={`workflow-chip ${highlightCount ? "armed" : ""}`} onClick={() => onWorkflowStep("export")}>
-          <b>5</b>
-          <span>导出</span>
-          <small>FCP / PR / 达芬奇 / 剪映</small>
-        </button>
+      <div className="project-status" aria-label="项目状态">
+        <span>{assetCount} 素材</span>
+        <span>{segmentCount} 段逐字稿</span>
+        <span>{highlightCount} 选段</span>
+        <span className={transcriptionReady ? "ready" : "muted"}>{transcriptionReady ? "转写就绪" : "待设置转写"}</span>
       </div>
 
-      <nav className="topbar-actions" aria-label="主工具栏">
-        <div className="action-cluster">
-          <button type="button" onClick={() => videoInputRef.current?.click()} title="导入本地视频">
-            <Film size={17} />
-            <span>导入视频</span>
-          </button>
-          <button type="button" onClick={() => jsonInputRef.current?.click()} title="导入逐字稿或本地项目 JSON">
-            <FileJson size={17} />
-            <span>导入 JSON</span>
-          </button>
-          <button type="button" onClick={onLoadDemo} title="载入样例转写">
-            <FlaskConical size={17} />
-            <span>样例</span>
-          </button>
-          {hasRecentProject && (
-            <button type="button" onClick={onRestoreRecent} title="恢复本机最近项目">
-              <History size={17} />
-              <span>最近项目</span>
+      <nav className="command-actions" aria-label="主命令">
+        <button type="button" className="primary-command" onClick={() => videoInputRef.current?.click()}>
+          <FileVideo2 size={16} />
+          导入视频
+        </button>
+        <button type="button" onClick={onOpenTranscription}>
+          <Captions size={16} />
+          转写
+        </button>
+        <button type="button" onClick={onSearchFocus}>
+          <Search size={16} />
+          搜索
+        </button>
+        <button type="button" onClick={onOpenStory}>
+          <PanelBottomOpen size={16} />
+          故事
+        </button>
+        <button type="button" disabled={!exportReady} onClick={onOpenExport} title={exportReady ? "查看导出准备度" : "先从逐字稿生成粗剪片段"}>
+          <Download size={16} />
+          导出
+        </button>
+        <details className="settings-menu">
+          <summary aria-label="设置">
+            <Settings size={16} />
+            设置
+          </summary>
+          <div className="settings-popover">
+            <button type="button" onClick={() => jsonInputRef.current?.click()}>
+              <FileJson size={15} />
+              导入 JSON
             </button>
-          )}
-        </div>
-        <button type="button" className="primary-toolbar-button" onClick={onOpenTranscription} title="视频转文字与 Key 设置">
-          <KeyRound size={17} />
-          <span>{transcriptionButtonLabel}</span>
-        </button>
-        <div className="export-group">
-          <Download size={17} />
-          <span className="export-group-label">导出工程</span>
-          <select
-            aria-label="导出"
-            defaultValue=""
-            onChange={(event) => {
-              const value = event.target.value as ExportType | "";
-              if (value) onExport(value);
-              event.target.value = "";
-            }}
-          >
-            <option value="">格式</option>
-            <option value="project">本地项目 JSON</option>
-            <option value="srt">字幕 SRT</option>
-            <option value="markdown">纸编辑 Markdown</option>
-            <option value="csv">场记 CSV</option>
-            <option value="finalcut">Final Cut Pro FCPXML</option>
-            <option value="premiere">Premiere Pro XML</option>
-            <option value="davinci">DaVinci Resolve FCPXML</option>
-            <option value="davinci-edl">DaVinci Resolve EDL</option>
-            <option value="jianying">剪映/CapCut 实验 FCPXML</option>
-            <option value="nle-guide">剪辑软件导入说明</option>
-          </select>
-        </div>
+            <button type="button" onClick={onLoadDemo}>
+              <Upload size={15} />
+              载入样例项目
+            </button>
+            {hasRecentProject && (
+              <button type="button" onClick={onRestoreRecent}>
+                <FolderClock size={15} />
+                最近项目
+              </button>
+            )}
+            <button type="button" onClick={onOpenFeedback}>
+              <MessageSquareText size={15} />
+              提交需求
+            </button>
+          </div>
+        </details>
       </nav>
 
       <input

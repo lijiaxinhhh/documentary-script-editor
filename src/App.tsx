@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AssetSidebar } from "./components/AssetSidebar";
+import { ExportInspector } from "./components/ExportInspector";
 import { FeedbackPanel } from "./components/FeedbackPanel";
+import { RoughCutQueue } from "./components/RoughCutQueue";
 import { StoryboardCanvas } from "./components/StoryboardCanvas";
-import { TopBar, type ExportType, type WorkflowStep } from "./components/TopBar";
+import { TopBar, type ExportType } from "./components/TopBar";
 import { TranscriptionPanel, type TranscriptionSettings } from "./components/TranscriptionPanel";
 import { TranscriptPane } from "./components/TranscriptPane";
 import { VideoPane } from "./components/VideoPane";
-import { WorkflowCallout } from "./components/WorkflowCallout";
 import { defaultGroups, demoProject } from "./data/demoTranscript";
 import { storyboardTemplates } from "./data/storyboardTemplates";
 import type { FeedbackPayload } from "./types/feedback";
@@ -15,6 +16,7 @@ import type { Asset, FilterMode, Highlight, Project, SearchResult, StoryNote, Tr
 import { downloadTextFile, exportPaperEditMarkdown, exportShotLogCsv, exportSrt, segmentToHighlight, speakerName } from "./utils/exporters";
 import { buildLocalProjectFile, exportFeedbackCsv, exportFeedbackJson, localProjectSchema, restoreLocalProjectFile } from "./utils/localProject";
 import { exportDaVinciEdl, exportFinalCutFcpxml, exportJianyingFcpxml, exportNleRelinkGuide, exportPremiereFcp7Xml } from "./utils/nleExporters";
+import { formatShortTime } from "./utils/timecode";
 
 const emptyProject: Project = {
   id: "local-project",
@@ -42,13 +44,7 @@ const feedbackStorageKey = "documentary-script-editor.feedback";
 const recentProjectStorageKey = "documentary-script-editor.recent-project";
 const transcriptionJobsStorageKey = "documentary-script-editor.transcription-jobs";
 
-const transcriptionProviderNames: Record<TranscriptionSettings["provider"], string> = {
-  "local-whisper": "本地 Whisper",
-  "local-funasr": "本地 FunASR",
-  "qwen-aliyun": "通义",
-  openai: "OpenAI",
-  deepgram: "Deepgram"
-};
+type MobileTab = "transcript" | "video" | "story" | "export";
 
 type BridgeSegment = {
   start: number;
@@ -67,6 +63,8 @@ export default function App() {
   const [speakerFilter, setSpeakerFilter] = useState("");
   const [focusedSegmentId, setFocusedSegmentId] = useState<string>();
   const [transcriptionOpen, setTranscriptionOpen] = useState(false);
+  const [storyOpen, setStoryOpen] = useState(false);
+  const [activeMobileTab, setActiveMobileTab] = useState<MobileTab>("transcript");
   const [transcriptionSaved, setTranscriptionSaved] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackSaved, setFeedbackSaved] = useState(false);
@@ -108,6 +106,7 @@ export default function App() {
     () => new Set(project.paperEdit.flatMap((group) => group.highlightIds)),
     [project.paperEdit]
   );
+  const paperClipCount = paperHighlightIds.size;
 
   const activeSegments = useMemo(() => {
     const assetId = activeAsset?.id;
@@ -133,7 +132,6 @@ export default function App() {
     [activeAsset?.id, project.segments]
   );
   const transcriptionReady = transcriptionSettings.provider.startsWith("local") || Boolean(transcriptionSettings.apiKey.trim());
-  const transcriptionProviderLabel = transcriptionProviderNames[transcriptionSettings.provider];
 
   const currentSegment = useMemo(() => {
     const segments = project.segments
@@ -670,44 +668,41 @@ export default function App() {
     }
   }
 
-  function handleWorkflowStep(step: WorkflowStep) {
-    if (step === "transcription") {
-      setTranscriptionOpen(true);
-      window.setTimeout(() => focusWorkflowTarget(".transcription-panel", ".transcription-panel select, .transcription-panel input"), 80);
-      return;
-    }
-    if (step === "export") {
-      focusWorkflowTarget(".export-group", ".export-group select");
-      return;
-    }
+  function focusSearch() {
+    setActiveMobileTab("transcript");
+    window.setTimeout(() => document.querySelector<HTMLInputElement>(".search-box input")?.focus(), 0);
+  }
 
-    const targetMap: Record<Exclude<WorkflowStep, "transcription" | "export">, string> = {
-      assets: ".sidebar",
-      selection: ".transcript-pane",
-      storyboard: ".storyboard-panel"
-    };
-    focusWorkflowTarget(targetMap[step]);
+  function openStoryDrawer() {
+    setStoryOpen(true);
+    setActiveMobileTab("story");
+  }
+
+  function openExportInspector() {
+    setActiveMobileTab("export");
+    window.setTimeout(() => document.querySelector<HTMLElement>(".export-inspector")?.scrollIntoView({ block: "center" }), 0);
   }
 
   return (
-    <div className="app-shell">
+    <div className="app-shell" data-mobile-tab={activeMobileTab}>
       <TopBar
         projectName={project.name}
         assetCount={project.assets.length}
         segmentCount={project.segments.length}
         highlightCount={project.highlights.length}
-        storyGroupCount={project.paperEdit.length}
-        transcriptionProviderLabel={transcriptionProviderLabel}
         transcriptionReady={transcriptionReady}
         hasRecentProject={hasRecentProject}
+        exportReady={paperClipCount > 0}
         onProjectNameChange={(name) => setProject((current) => ({ ...current, name }))}
         onVideoFile={importVideo}
         onJsonFile={importJson}
         onLoadDemo={loadDemoTranscript}
         onRestoreRecent={restoreRecentProject}
-        onExport={handleExport}
         onOpenTranscription={() => setTranscriptionOpen(true)}
-        onWorkflowStep={handleWorkflowStep}
+        onSearchFocus={focusSearch}
+        onOpenStory={openStoryDrawer}
+        onOpenExport={openExportInspector}
+        onOpenFeedback={() => setFeedbackOpen(true)}
       />
       <TranscriptionPanel
         open={transcriptionOpen}
@@ -731,24 +726,13 @@ export default function App() {
         onExportCsv={() => exportStoredFeedback("csv")}
       />
       <main className="workspace">
-        <WorkflowCallout
-          asset={activeAsset}
-          transcriptCount={activeAssetTranscriptCount}
-          highlightCount={project.highlights.length}
-          providerLabel={transcriptionProviderLabel}
-          transcriptionReady={transcriptionReady}
-          onVideoFile={importVideo}
-          onLoadDemo={loadDemoTranscript}
-          onOpenTranscription={() => setTranscriptionOpen(true)}
-          onOpenFeedback={() => setFeedbackOpen(true)}
-        />
         <AssetSidebar
           assets={project.assets}
           activeAssetId={activeAsset?.id}
           segments={project.segments}
           highlights={project.highlights}
           speakers={project.speakers}
-        query={query}
+          query={query}
           filterMode={filterMode}
           speakerFilter={speakerFilter}
           searchResults={searchResults}
@@ -779,83 +763,126 @@ export default function App() {
           onAddToPaper={addToPaper}
           onAddTextToPaper={addTextToPaper}
           onOpenTranscription={() => setTranscriptionOpen(true)}
-        />
-        <VideoPane
-          asset={activeAsset}
-          currentTime={currentTime}
-          currentSegment={currentSegment}
-          currentSpeakerName={speakerName(project, currentSegment?.speakerId)}
-          transcriptCount={activeAssetTranscriptCount}
-          videoRef={videoRef}
-          onOpenTranscription={() => setTranscriptionOpen(true)}
           onVideoFile={importVideo}
-          onMediaError={markMediaError}
-          onTimeUpdate={(time) => {
-            setCurrentTime(time);
-            setFocusedSegmentId(undefined);
-          }}
-          onDuration={(duration) => {
-            if (!activeAsset) return;
-            setProject((current) => ({
-              ...current,
-              assets: current.assets.map((asset) =>
-                asset.id === activeAsset.id
-                  ? {
-                      ...asset,
-                      duration,
-                      mediaError: undefined,
-                      mediaWarning: mediaDurationWarning(asset.mediaWarning, asset.duration, duration)
-                    }
-                  : asset
-              )
-            }));
-          }}
+          onLoadDemo={loadDemoTranscript}
         />
+        <aside className="inspector-rail" aria-label="看片、粗剪与导出">
+          <VideoPane
+            asset={activeAsset}
+            currentTime={currentTime}
+            currentSegment={currentSegment}
+            currentSpeakerName={speakerName(project, currentSegment?.speakerId)}
+            transcriptCount={activeAssetTranscriptCount}
+            videoRef={videoRef}
+            onOpenTranscription={() => setTranscriptionOpen(true)}
+            onVideoFile={importVideo}
+            onMediaError={markMediaError}
+            onTimeUpdate={(time) => {
+              setCurrentTime(time);
+              setFocusedSegmentId(undefined);
+            }}
+            onDuration={(duration) => {
+              if (!activeAsset) return;
+              setProject((current) => ({
+                ...current,
+                assets: current.assets.map((asset) =>
+                  asset.id === activeAsset.id
+                    ? {
+                        ...asset,
+                        duration,
+                        mediaError: undefined,
+                        mediaWarning: mediaDurationWarning(asset.mediaWarning, asset.duration, duration)
+                      }
+                    : asset
+                )
+              }));
+            }}
+          />
+          <RoughCutQueue
+            highlights={project.highlights}
+            paperHighlightIds={paperHighlightIds}
+            speakers={project.speakers}
+            assets={project.assets}
+            onSeek={(highlight) => seekTo(highlight.segmentId, highlight.start)}
+            onOpenStory={openStoryDrawer}
+            onOpenExport={openExportInspector}
+          />
+          <ExportInspector project={project} paperHighlightIds={paperHighlightIds} onExport={handleExport} />
+        </aside>
       </main>
-      <StoryboardCanvas
-        groups={project.paperEdit}
-        highlights={project.highlights}
-        notes={storyNotes}
-        speakers={project.speakers}
-        assets={project.assets}
-        onAddGroup={addStoryGroup}
-        onRenameGroup={renameStoryGroup}
-        onMoveHighlight={moveHighlight}
-        onRemoveHighlight={removeFromPaper}
-        onSeek={(highlight) => seekTo(highlight.segmentId, highlight.start)}
-        onHighlightNoteChange={updateHighlightNote}
-        onAddNote={addStoryNote}
-        onAddComment={addStoryComment}
-        onAddImage={addStoryImage}
-        onEditNote={(noteId, text) =>
-          setStoryNotes((current) => current.map((note) => (note.id === noteId ? { ...note, text } : note)))
-        }
-        onRelinkImage={relinkStoryImage}
-        onMoveNote={(noteId, groupId) =>
-          setStoryNotes((current) => current.map((note) => (note.id === noteId ? { ...note, groupId } : note)))
-        }
-        onRemoveNote={(noteId) => setStoryNotes((current) => current.filter((note) => note.id !== noteId))}
-        onApplyTemplate={applyStoryboardTemplate}
-      />
+      {(storyOpen || paperClipCount > 0) && (
+        <section className={`story-drawer ${storyOpen ? "expanded" : "collapsed"}`} aria-label="故事抽屉">
+          <header className="story-drawer-header">
+            <div>
+              <span className="pane-title">Story Drawer</span>
+              <strong>{paperClipCount} 个片段从逐字稿生成</strong>
+            </div>
+            <div className="story-drawer-actions">
+              <button type="button" onClick={() => setStoryOpen((value) => !value)}>
+                {storyOpen ? "收起故事版" : "展开故事版"}
+              </button>
+              <button type="button" onClick={openExportInspector} disabled={paperClipCount === 0}>
+                导出准备
+              </button>
+            </div>
+          </header>
+          {storyOpen ? (
+            <StoryboardCanvas
+              groups={project.paperEdit}
+              highlights={project.highlights}
+              notes={storyNotes}
+              speakers={project.speakers}
+              assets={project.assets}
+              onAddGroup={addStoryGroup}
+              onRenameGroup={renameStoryGroup}
+              onMoveHighlight={moveHighlight}
+              onRemoveHighlight={removeFromPaper}
+              onSeek={(highlight) => seekTo(highlight.segmentId, highlight.start)}
+              onHighlightNoteChange={updateHighlightNote}
+              onAddNote={addStoryNote}
+              onAddComment={addStoryComment}
+              onAddImage={addStoryImage}
+              onEditNote={(noteId, text) =>
+                setStoryNotes((current) => current.map((note) => (note.id === noteId ? { ...note, text } : note)))
+              }
+              onRelinkImage={relinkStoryImage}
+              onMoveNote={(noteId, groupId) =>
+                setStoryNotes((current) => current.map((note) => (note.id === noteId ? { ...note, groupId } : note)))
+              }
+              onRemoveNote={(noteId) => setStoryNotes((current) => current.filter((note) => note.id !== noteId))}
+              onApplyTemplate={applyStoryboardTemplate}
+            />
+          ) : (
+            <div className="story-drawer-strip">
+              {project.highlights
+                .filter((highlight) => paperHighlightIds.has(highlight.id))
+                .slice(0, 5)
+                .map((highlight) => (
+                  <button key={highlight.id} type="button" className="story-strip-card" onClick={() => seekTo(highlight.segmentId, highlight.start)}>
+                    <span>{formatShortTime(highlight.start)}</span>
+                    <strong>{highlight.text}</strong>
+                  </button>
+                ))}
+            </div>
+          )}
+        </section>
+      )}
+      <nav className="mobile-tabbar" aria-label="移动端工作区">
+        <button type="button" className={activeMobileTab === "transcript" ? "active" : ""} onClick={() => setActiveMobileTab("transcript")}>
+          Transcript
+        </button>
+        <button type="button" className={activeMobileTab === "video" ? "active" : ""} onClick={() => setActiveMobileTab("video")}>
+          Video
+        </button>
+        <button type="button" className={activeMobileTab === "story" ? "active" : ""} onClick={openStoryDrawer}>
+          Story
+        </button>
+        <button type="button" className={activeMobileTab === "export" ? "active" : ""} onClick={() => setActiveMobileTab("export")}>
+          Export
+        </button>
+      </nav>
     </div>
   );
-}
-
-function focusWorkflowTarget(selector: string, focusSelector?: string) {
-  const target = document.querySelector<HTMLElement>(selector);
-  if (!target) return;
-
-  target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" });
-  target.classList.remove("workflow-target-pulse");
-  window.requestAnimationFrame(() => {
-    target.classList.add("workflow-target-pulse");
-    window.setTimeout(() => target.classList.remove("workflow-target-pulse"), 1200);
-  });
-
-  const focusTarget = focusSelector
-    ? (target.querySelector<HTMLElement>(focusSelector) ?? document.querySelector<HTMLElement>(focusSelector))
-    : undefined;
-  focusTarget?.focus({ preventScroll: true });
 }
 
 function ensureHighlight(project: Project, segmentId: string): { project: Project; highlight: Highlight } {

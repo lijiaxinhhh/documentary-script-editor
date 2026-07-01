@@ -168,7 +168,14 @@ function AssetCard({
       <button type="button" className="asset-card-main" onClick={() => onAssetSelect(asset.id)}>
         <span className="asset-name">{asset.fileName}</span>
         <span className="asset-meta">
-          {transcriptCount ? `已转写 ${transcriptCount} 段` : asset.objectUrl ? "素材已导入 · 待转写" : "等待视频"} · {highlightCount} 个选段
+          {needsRelink
+            ? `需要关联视频 · 已转写 ${transcriptCount} 段`
+            : transcriptCount
+              ? `已转写 ${transcriptCount} 段`
+              : asset.objectUrl
+                ? "素材已导入 · 待转写"
+                : "等待视频"}{" "}
+          · {highlightCount} 个选段
         </span>
         {asset.mediaWarning && <span className="asset-warning">{asset.mediaWarning}</span>}
         {asset.mediaError && <span className="asset-warning error">{asset.mediaError}</span>}
