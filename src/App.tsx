@@ -87,14 +87,14 @@ export default function App() {
       groupId: "opening",
       kind: "comment",
       color: "white",
-      text: "Theme stated doesn't have to be obvious. Let the viewer feel the idea through the scene."
+      text: "主题不一定要直接说出来。让观众通过场景和人物行动感受到它。"
     },
     {
       id: "note_broll_pool",
       groupId: "background",
       kind: "note",
       color: "blue",
-      text: "B-roll pool: archival photos, garage details, mountain wide shots."
+      text: "可用 B-roll：旧照片、工作空间细节、环境大全景。"
     }
   ]);
   const videoRef = useRef<HTMLVideoElement>(null);

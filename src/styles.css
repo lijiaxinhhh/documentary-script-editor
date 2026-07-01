@@ -3944,3 +3944,203 @@ textarea {
     padding: 5px 6px;
   }
 }
+
+/* Oryzo-informed fusion pass: immersive material cues, original documentary workflow. */
+.project-status-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  min-width: 0;
+  margin-top: 2px;
+}
+
+.project-status-row span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 18px;
+  border: 1px solid rgba(83, 196, 200, 0.22);
+  border-radius: 999px;
+  background: rgba(83, 196, 200, 0.065);
+  color: #b8f4f4;
+  padding: 0 7px;
+  font-size: 10px;
+  font-weight: 760;
+  white-space: nowrap;
+}
+
+.workflow-strip {
+  --workflow-step-min: 156px;
+}
+
+@media (min-width: 1181px) {
+  .workflow-chip {
+    flex: 1 1 var(--workflow-step-min);
+    max-width: 224px;
+  }
+}
+
+@media (max-width: 900px) {
+  .workflow-strip {
+    display: flex;
+    overflow-x: auto;
+    padding-bottom: 1px;
+    scrollbar-width: none;
+  }
+
+  .workflow-strip::-webkit-scrollbar {
+    display: none;
+  }
+
+  .workflow-chip {
+    flex: 0 0 138px;
+  }
+}
+
+@media (max-width: 640px) {
+  .workflow-chip {
+    flex-basis: 112px;
+  }
+
+  .workflow-chip small {
+    display: none;
+  }
+}
+
+.workflow-format-rail {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 5px;
+}
+
+.workflow-format-rail span {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  border: 1px solid rgba(239, 183, 100, 0.2);
+  border-radius: 6px;
+  background: rgba(239, 183, 100, 0.075);
+  color: #f2cf98;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 780;
+  white-space: nowrap;
+}
+
+.topbar {
+  box-shadow: inset 0 -1px rgba(255, 255, 255, 0.02);
+}
+
+.workspace {
+  background:
+    radial-gradient(circle at 76% 4%, rgba(83, 196, 200, 0.055), transparent 28%),
+    linear-gradient(rgba(255, 255, 255, 0.012) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.012) 1px, transparent 1px);
+  background-size: auto, 36px 36px, 36px 36px;
+}
+
+.workflow-callout {
+  border-color: rgba(239, 183, 100, 0.14);
+}
+
+.workflow-callout::after {
+  content: "";
+  position: absolute;
+  right: 13px;
+  top: 12px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--taste-accent);
+  box-shadow: 0 0 0 5px rgba(239, 183, 100, 0.08);
+}
+
+.transcript-pane {
+  border-color: rgba(239, 183, 100, 0.16);
+}
+
+.video-pane {
+  border-color: rgba(83, 196, 200, 0.13);
+}
+
+.video-shell::before {
+  content: "";
+  position: absolute;
+  inset: 14px;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.055);
+  border-radius: 8px;
+}
+
+.video-shell::after {
+  content: "";
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 14px;
+  height: 1px;
+  pointer-events: none;
+  background: linear-gradient(90deg, transparent, rgba(83, 196, 200, 0.38), rgba(239, 183, 100, 0.38), transparent);
+}
+
+.transcription-panel {
+  background:
+    linear-gradient(180deg, rgba(239, 183, 100, 0.05), transparent 220px),
+    #15191e;
+}
+
+.transcription-card:first-of-type,
+.transcription-runtime-note {
+  border-color: rgba(239, 183, 100, 0.24);
+}
+
+.storyboard-panel {
+  border-color: rgba(239, 183, 100, 0.16);
+}
+
+.storyboard-header .pane-title::after {
+  content: " / 模板";
+  color: rgba(239, 183, 100, 0.72);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+@media (max-width: 640px) {
+  .project-status-row {
+    gap: 4px;
+  }
+
+  .project-status-row span {
+    min-height: 17px;
+    padding: 0 6px;
+    font-size: 9px;
+  }
+
+  .workflow-format-rail span {
+    font-size: 10px;
+    padding: 0 6px;
+  }
+
+  .workflow-callout::after {
+    display: none;
+  }
+}
+
+/* Keep the five-step workflow readable after adding export as a first-class step. */
+@media (min-width: 901px) {
+  .app-shell {
+    grid-template-rows: 116px minmax(330px, 1fr) minmax(292px, 36vh);
+  }
+
+  .topbar {
+    min-height: 116px;
+    align-content: center;
+    row-gap: 10px;
+  }
+
+  .workflow-strip {
+    align-self: center;
+  }
+}

@@ -88,6 +88,11 @@ export function TopBar({
             {projectName}
           </button>
         )}
+        <div className="project-status-row" aria-label="隐私与本地状态">
+          <span>本地优先</span>
+          <span>素材不上云</span>
+          <span>Key 存本机</span>
+        </div>
       </div>
 
       <div className="workflow-strip" aria-label="工作流程">
@@ -110,6 +115,11 @@ export function TopBar({
           <b>4</b>
           <span>故事版</span>
           <small>{storyGroupCount} 栏</small>
+        </span>
+        <span className={`workflow-chip ${highlightCount ? "armed" : ""}`}>
+          <b>5</b>
+          <span>导出</span>
+          <small>FCP / PR / 达芬奇 / 剪映</small>
         </span>
       </div>
 

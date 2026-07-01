@@ -75,6 +75,12 @@ export function WorkflowCallout({
             <span>故事版组织粗剪，导出到 FCP / PR / 达芬奇 / 剪映</span>
           </li>
         </ul>
+        <div className="workflow-format-rail" aria-label="剪辑软件格式列表">
+          <span>FCPXML</span>
+          <span>Premiere XML</span>
+          <span>DaVinci EDL</span>
+          <span>剪映 / CapCut</span>
+        </div>
       </div>
 
       <div className="workflow-callout-actions">
