@@ -17,6 +17,7 @@
 - 重做 `TranscriptPane` 的核心手势：选中文字出现浮动工具条，可播放、设为片段、跳过、打标签、加入故事。
 - 逐字稿保留稿纸感，已入粗剪的片段在文本里有琥珀标记；跳过片段用 muted/strike 表示，不真实删除文本。
 - 故事版从常驻主屏降级为底部 `Story Drawer`，有片段后出现，展开后才进入 Milanote-like board。
+- 新增 Premiere 式可拉伸工作台：素材库 / 逐字稿 / 检查器可横向拖拽，右侧视频 / 粗剪 / 导出可纵向拖拽，Story Drawer 可上下拉伸，布局尺寸会保存在本机浏览器。
 - 移动端改为任务 tab：Transcript / Video / Story / Export，不再硬挤三栏。
 - 保留本地转写预检面板：本机 bridge、provider、API Key、发言人区分、词级时间戳、热词和隐私边界仍在二级流程里。
 - 恢复项目状态继续显示“需要关联视频”，避免把无本地 blob 的项目假装成可播放。
@@ -40,8 +41,8 @@
 
 - `pnpm typecheck`：通过。
 - `pnpm test`：通过，2 个测试文件、8 个测试通过。
-- `pnpm test:e2e`：通过，8 个 e2e 全部通过。
-- `pnpm build`：通过，CSS 约 21.16 kB，JS 约 322.29 kB。
+- `pnpm test:e2e`：通过，9 个 e2e 全部通过；新增覆盖桌面面板拖拽缩放。
+- `pnpm build`：通过，CSS 约 22.62 kB，JS 约 326.21 kB。
 - Playwright 视觉 QA：通过。已检查桌面空项目、桌面样例选段后、移动端空项目。
 - axe 基础无障碍扫描：通过，当前没有禁用 color-contrast。
 
@@ -58,6 +59,7 @@
 - Layout：桌面为左素材、中逐字稿、右监看/粗剪/导出；故事版默认不占主屏。
 - Color：已锁定暗色 chrome + 暖色 paper + 琥珀 accent。
 - Interaction：文本选择能生成粗剪片段，导出从禁用变为可用。
+- Resizing：桌面工作台支持横向/纵向拖拽分隔条，separator 带完整 ARIA 属性，键盘方向键也能调整。
 - Mobile：使用底部任务 tab，390px 视口无横向溢出。
 
 ## UX 评分

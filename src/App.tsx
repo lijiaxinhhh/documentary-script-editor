@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { AssetSidebar } from "./components/AssetSidebar";
 import { ExportInspector } from "./components/ExportInspector";
 import { FeedbackPanel } from "./components/FeedbackPanel";
@@ -43,8 +43,25 @@ const transcriptionStorageKey = "documentary-script-editor.transcription-setting
 const feedbackStorageKey = "documentary-script-editor.feedback";
 const recentProjectStorageKey = "documentary-script-editor.recent-project";
 const transcriptionJobsStorageKey = "documentary-script-editor.transcription-jobs";
+const layoutStorageKey = "documentary-script-editor.layout";
 
 type MobileTab = "transcript" | "video" | "story" | "export";
+
+type LayoutSizes = {
+  mediaBin: number;
+  inspector: number;
+  video: number;
+  roughCut: number;
+  storyDrawer: number;
+};
+
+const defaultLayoutSizes: LayoutSizes = {
+  mediaBin: 260,
+  inspector: 430,
+  video: 300,
+  roughCut: 180,
+  storyDrawer: 116
+};
 
 type BridgeSegment = {
   start: number;
@@ -69,6 +86,7 @@ export default function App() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [feedbackSaved, setFeedbackSaved] = useState(false);
   const [feedbackCount, setFeedbackCount] = useState(() => readFeedbackItems().length);
+  const [layoutSizes, setLayoutSizes] = useState<LayoutSizes>(() => readLayoutSizes());
   const [hasRecentProject, setHasRecentProject] = useState(() => Boolean(window.localStorage.getItem(recentProjectStorageKey)));
   const [transcriptionJobs, setTranscriptionJobs] = useState<TranscriptionJob[]>(() => readTranscriptionJobs());
   const [transcriptionSettings, setTranscriptionSettings] = useState<TranscriptionSettings>(() => {
@@ -96,6 +114,8 @@ export default function App() {
     }
   ]);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const workspaceRef = useRef<HTMLElement | null>(null);
+  const inspectorRailRef = useRef<HTMLElement | null>(null);
 
   const activeAsset = useMemo(
     () => project.assets.find((asset) => asset.id === activeAssetId) ?? project.assets[0],
@@ -513,6 +533,10 @@ export default function App() {
     window.localStorage.setItem(transcriptionJobsStorageKey, JSON.stringify(transcriptionJobs));
   }, [transcriptionJobs]);
 
+  useEffect(() => {
+    window.localStorage.setItem(layoutStorageKey, JSON.stringify(layoutSizes));
+  }, [layoutSizes]);
+
   function saveTranscriptionSettings() {
     window.localStorage.setItem(transcriptionStorageKey, JSON.stringify(transcriptionSettings));
     setTranscriptionSaved(true);
@@ -675,6 +699,7 @@ export default function App() {
 
   function openStoryDrawer() {
     setStoryOpen(true);
+    setLayoutSizes((current) => ({ ...current, storyDrawer: Math.max(current.storyDrawer, 320) }));
     setActiveMobileTab("story");
   }
 
@@ -725,7 +750,16 @@ export default function App() {
         onExportJson={() => exportStoredFeedback("json")}
         onExportCsv={() => exportStoredFeedback("csv")}
       />
-      <main className="workspace">
+      <main
+        className="workspace"
+        ref={workspaceRef}
+        style={
+          {
+            "--media-bin-width": `${layoutSizes.mediaBin}px`,
+            "--inspector-width": `${layoutSizes.inspector}px`
+          } as CSSProperties
+        }
+      >
         <AssetSidebar
           assets={project.assets}
           activeAssetId={activeAsset?.id}
@@ -748,6 +782,28 @@ export default function App() {
           onOpenTranscription={() => setTranscriptionOpen(true)}
           onVideoFile={importVideo}
         />
+        <ResizeHandle
+          className="workspace-resizer media-transcript"
+          label="调整素材库和逐字稿宽度"
+          orientation="vertical"
+          value={layoutSizes.mediaBin}
+          min={190}
+          max={420}
+          onStep={(delta) => {
+            setLayoutSizes((current) => ({
+              ...current,
+              mediaBin: clamp(current.mediaBin + delta, 190, 420)
+            }));
+          }}
+          onDrag={(event) => {
+            const rect = workspaceRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            setLayoutSizes((current) => ({
+              ...current,
+              mediaBin: clamp(event.clientX - rect.left, 190, 420)
+            }));
+          }}
+        />
         <TranscriptPane
           segments={activeSegments}
           speakers={project.speakers}
@@ -766,7 +822,39 @@ export default function App() {
           onVideoFile={importVideo}
           onLoadDemo={loadDemoTranscript}
         />
-        <aside className="inspector-rail" aria-label="看片、粗剪与导出">
+        <ResizeHandle
+          className="workspace-resizer transcript-inspector"
+          label="调整逐字稿和检查器宽度"
+          orientation="vertical"
+          value={layoutSizes.inspector}
+          min={320}
+          max={620}
+          onStep={(delta) => {
+            setLayoutSizes((current) => ({
+              ...current,
+              inspector: clamp(current.inspector - delta, 320, 620)
+            }));
+          }}
+          onDrag={(event) => {
+            const rect = workspaceRef.current?.getBoundingClientRect();
+            if (!rect) return;
+            setLayoutSizes((current) => ({
+              ...current,
+              inspector: clamp(rect.right - event.clientX, 320, 620)
+            }));
+          }}
+        />
+        <aside
+          className="inspector-rail"
+          ref={inspectorRailRef}
+          aria-label="看片、粗剪与导出"
+          style={
+            {
+              "--video-panel-height": `${layoutSizes.video}px`,
+              "--rough-cut-height": `${layoutSizes.roughCut}px`
+            } as CSSProperties
+          }
+        >
           <VideoPane
             asset={activeAsset}
             currentTime={currentTime}
@@ -794,7 +882,29 @@ export default function App() {
                         mediaWarning: mediaDurationWarning(asset.mediaWarning, asset.duration, duration)
                       }
                     : asset
-                )
+              )
+            }));
+          }}
+        />
+          <ResizeHandle
+            className="inspector-resizer video-queue"
+            label="调整视频监看和粗剪队列高度"
+            orientation="horizontal"
+            value={layoutSizes.video}
+            min={180}
+            max={560}
+            onStep={(delta) => {
+              setLayoutSizes((current) => ({
+                ...current,
+                video: clamp(current.video + delta, 180, 560)
+              }));
+            }}
+            onDrag={(event) => {
+              const rect = inspectorRailRef.current?.getBoundingClientRect();
+              if (!rect) return;
+              setLayoutSizes((current) => ({
+                ...current,
+                video: clamp(event.clientY - rect.top, 180, Math.max(220, rect.height - 260))
               }));
             }}
           />
@@ -807,18 +917,79 @@ export default function App() {
             onOpenStory={openStoryDrawer}
             onOpenExport={openExportInspector}
           />
+          <ResizeHandle
+            className="inspector-resizer queue-export"
+            label="调整粗剪队列和导出准备度高度"
+            orientation="horizontal"
+            value={layoutSizes.roughCut}
+            min={120}
+            max={360}
+            onStep={(delta) => {
+              setLayoutSizes((current) => ({
+                ...current,
+                roughCut: clamp(current.roughCut + delta, 120, 360)
+              }));
+            }}
+            onDrag={(event) => {
+              const rect = inspectorRailRef.current?.getBoundingClientRect();
+              if (!rect) return;
+              setLayoutSizes((current) => {
+                const nextRoughCut = event.clientY - rect.top - current.video - 16;
+                return {
+                  ...current,
+                  roughCut: clamp(nextRoughCut, 120, Math.max(140, rect.height - current.video - 180))
+                };
+              });
+            }}
+          />
           <ExportInspector project={project} paperHighlightIds={paperHighlightIds} onExport={handleExport} />
         </aside>
       </main>
       {(storyOpen || paperClipCount > 0) && (
-        <section className={`story-drawer ${storyOpen ? "expanded" : "collapsed"}`} aria-label="故事抽屉">
+        <section
+          className={`story-drawer ${storyOpen ? "expanded" : "collapsed"}`}
+          aria-label="故事抽屉"
+          style={{ "--story-drawer-height": `${layoutSizes.storyDrawer}px` } as CSSProperties}
+        >
+          <ResizeHandle
+            className="story-drawer-resizer"
+            label="调整故事抽屉高度"
+            orientation="horizontal"
+            value={layoutSizes.storyDrawer}
+            min={96}
+            max={560}
+            onStep={(delta) => {
+              setLayoutSizes((current) => {
+                const next = clamp(current.storyDrawer - delta, 96, 560);
+                setStoryOpen(next > 150);
+                return { ...current, storyDrawer: next };
+              });
+            }}
+            onDrag={(event) => {
+              setLayoutSizes((current) => {
+                const next = clamp(window.innerHeight - event.clientY, 96, Math.min(620, window.innerHeight - 160));
+                setStoryOpen(next > 150);
+                return { ...current, storyDrawer: next };
+              });
+            }}
+          />
           <header className="story-drawer-header">
             <div>
               <span className="pane-title">Story Drawer</span>
               <strong>{paperClipCount} 个片段从逐字稿生成</strong>
             </div>
             <div className="story-drawer-actions">
-              <button type="button" onClick={() => setStoryOpen((value) => !value)}>
+              <button
+                type="button"
+                onClick={() => {
+                  const nextOpen = !storyOpen;
+                  setStoryOpen(nextOpen);
+                  setLayoutSizes((current) => ({
+                    ...current,
+                    storyDrawer: nextOpen ? Math.max(current.storyDrawer, 320) : 116
+                  }));
+                }}
+              >
                 {storyOpen ? "收起故事版" : "展开故事版"}
               </button>
               <button type="button" onClick={openExportInspector} disabled={paperClipCount === 0}>
@@ -894,6 +1065,94 @@ function ensureHighlight(project: Project, segmentId: string): { project: Projec
   if (existing) return { project, highlight: existing };
   const highlight = segmentToHighlight(project, segment);
   return { project: { ...project, highlights: [...project.highlights, highlight] }, highlight };
+}
+
+type ResizeHandleProps = {
+  className: string;
+  label: string;
+  orientation: "horizontal" | "vertical";
+  value: number;
+  min: number;
+  max: number;
+  onDrag: (event: PointerEvent) => void;
+  onStep: (delta: number) => void;
+};
+
+function ResizeHandle({ className, label, orientation, value, min, max, onDrag, onStep }: ResizeHandleProps) {
+  const keyStep = 24;
+  return (
+    <button
+      type="button"
+      className={`resize-handle ${className}`}
+      aria-label={label}
+      aria-orientation={orientation}
+      aria-valuemin={min}
+      aria-valuemax={max}
+      aria-valuenow={Math.round(value)}
+      role="separator"
+      title={label}
+      onPointerDown={(event) => {
+        event.preventDefault();
+        const target = event.currentTarget;
+        target.setPointerCapture(event.pointerId);
+        document.body.classList.add(orientation === "vertical" ? "is-resizing-x" : "is-resizing-y");
+        const handlePointerMove = (moveEvent: PointerEvent) => onDrag(moveEvent);
+        const handlePointerUp = () => {
+          document.body.classList.remove("is-resizing-x", "is-resizing-y");
+          target.removeEventListener("pointermove", handlePointerMove);
+          target.removeEventListener("pointerup", handlePointerUp);
+          target.removeEventListener("pointercancel", handlePointerUp);
+        };
+        target.addEventListener("pointermove", handlePointerMove);
+        target.addEventListener("pointerup", handlePointerUp);
+        target.addEventListener("pointercancel", handlePointerUp);
+      }}
+      onKeyDown={(event) => {
+        if (orientation === "vertical") {
+          if (event.key === "ArrowLeft") {
+            event.preventDefault();
+            onStep(-keyStep);
+          }
+          if (event.key === "ArrowRight") {
+            event.preventDefault();
+            onStep(keyStep);
+          }
+          return;
+        }
+        if (event.key === "ArrowUp") {
+          event.preventDefault();
+          onStep(-keyStep);
+        }
+        if (event.key === "ArrowDown") {
+          event.preventDefault();
+          onStep(keyStep);
+        }
+      }}
+    >
+      <span aria-hidden="true" />
+    </button>
+  );
+}
+
+function readLayoutSizes(): LayoutSizes {
+  try {
+    const saved = window.localStorage.getItem(layoutStorageKey);
+    if (!saved) return defaultLayoutSizes;
+    const parsed = JSON.parse(saved);
+    return {
+      mediaBin: clamp(Number(parsed.mediaBin ?? defaultLayoutSizes.mediaBin), 190, 420),
+      inspector: clamp(Number(parsed.inspector ?? defaultLayoutSizes.inspector), 320, 620),
+      video: clamp(Number(parsed.video ?? defaultLayoutSizes.video), 180, 560),
+      roughCut: clamp(Number(parsed.roughCut ?? defaultLayoutSizes.roughCut), 120, 360),
+      storyDrawer: clamp(Number(parsed.storyDrawer ?? defaultLayoutSizes.storyDrawer), 96, 560)
+    };
+  } catch {
+    return defaultLayoutSizes;
+  }
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function addSelectionHighlight(project: Project, segmentId: string, selectedText: string): { project: Project; highlight: Highlight } {

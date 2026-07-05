@@ -9,7 +9,7 @@ test("first screen prioritizes local video import and paper-editing transcript",
   await expect(page.getByRole("button", { name: "导入本地视频" })).toBeVisible();
   await expect(page.getByRole("button", { name: "载入样例项目" })).toBeVisible();
   await expect(page.locator(".command-actions").getByRole("button", { name: "导出", exact: true })).toBeDisabled();
-  await expect(page.getByLabel("导出准备度")).toContainText("导出不可用");
+  await expect(page.getByRole("region", { name: "导出准备度" })).toContainText("导出不可用");
   await expect(page.getByText("API Key")).toHaveCount(0);
   await expect(page.locator(".storyboard-panel")).toHaveCount(0);
 
@@ -23,15 +23,15 @@ test("sample path turns selected transcript text into a rough cut and export-rea
 
   await expect(page.locator(".transcript-pane .pane-title", { hasText: "逐字稿" })).toBeVisible();
   await expect(page.getByText("受访者 A").first()).toBeVisible();
-  await expect(page.getByLabel("粗剪队列")).toContainText("0 段");
+  await expect(page.getByRole("region", { name: "粗剪队列" })).toContainText("0 段");
 
   await selectFirstTranscriptText(page);
   await expect(page.getByRole("toolbar", { name: "选中文字工具栏" })).toBeVisible();
   await page.getByRole("button", { name: "设为片段" }).click();
 
-  await expect(page.getByLabel("粗剪队列")).toContainText("1 段");
-  await expect(page.getByLabel("故事抽屉")).toBeVisible();
-  await expect(page.getByLabel("导出准备度")).toContainText("可生成粗剪工程");
+  await expect(page.getByRole("region", { name: "粗剪队列" })).toContainText("1 段");
+  await expect(page.getByRole("region", { name: "故事抽屉" })).toBeVisible();
+  await expect(page.getByRole("region", { name: "导出准备度" })).toContainText("可生成粗剪工程");
   await expect(page.locator(".command-actions").getByRole("button", { name: "导出", exact: true })).toBeEnabled();
 
   await page.getByRole("button", { name: "展开故事版" }).click();
@@ -57,7 +57,31 @@ test("mobile uses task tabs instead of squeezing the desktop workbench", async (
   await expect(page.locator(".transcript-pane")).toHaveCount(1);
 
   await page.getByRole("button", { name: "Export" }).click();
-  await expect(page.getByLabel("导出准备度")).toBeVisible();
+  await expect(page.getByRole("region", { name: "导出准备度" })).toBeVisible();
+});
+
+test("desktop workbench panels can be resized like an editing suite", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.goto("/");
+
+  const sidebarBefore = await boxWidth(page, ".sidebar");
+  await dragBy(page, ".workspace-resizer.media-transcript", 80, 0);
+  await expect.poll(() => boxWidth(page, ".sidebar")).toBeGreaterThan(sidebarBefore + 48);
+
+  const inspectorBefore = await boxWidth(page, ".inspector-rail");
+  await dragBy(page, ".workspace-resizer.transcript-inspector", -90, 0);
+  await expect.poll(() => boxWidth(page, ".inspector-rail")).toBeGreaterThan(inspectorBefore + 54);
+
+  const videoBefore = await boxHeight(page, ".video-pane");
+  await dragBy(page, ".inspector-resizer.video-queue", 0, 80);
+  await expect.poll(() => boxHeight(page, ".video-pane")).toBeGreaterThan(videoBefore + 48);
+
+  await page.getByRole("button", { name: "载入样例项目" }).click();
+  await selectFirstTranscriptText(page);
+  await page.getByRole("button", { name: "设为片段" }).click();
+  const drawerBefore = await boxHeight(page, ".story-drawer");
+  await dragBy(page, ".story-drawer-resizer", 0, -130);
+  await expect.poll(() => boxHeight(page, ".story-drawer")).toBeGreaterThan(drawerBefore + 70);
 });
 
 test("restored local project prompts for video relink", async ({ page }) => {
@@ -242,4 +266,27 @@ async function selectFirstTranscriptText(page: import("@playwright/test").Page) 
       })
     );
   });
+}
+
+async function dragBy(page: import("@playwright/test").Page, selector: string, deltaX: number, deltaY: number) {
+  const handle = await page.locator(selector).boundingBox();
+  if (!handle) throw new Error(`Missing resize handle ${selector}`);
+  const startX = handle.x + handle.width / 2;
+  const startY = handle.y + handle.height / 2;
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + deltaX, startY + deltaY, { steps: 8 });
+  await page.mouse.up();
+}
+
+async function boxWidth(page: import("@playwright/test").Page, selector: string) {
+  const box = await page.locator(selector).boundingBox();
+  if (!box) throw new Error(`Missing box ${selector}`);
+  return box.width;
+}
+
+async function boxHeight(page: import("@playwright/test").Page, selector: string) {
+  const box = await page.locator(selector).boundingBox();
+  if (!box) throw new Error(`Missing box ${selector}`);
+  return box.height;
 }
