@@ -36,7 +36,10 @@ const project: Project = {
       end: 4.5,
       text: "这里是第一段关键表达。",
       tags: ["opening"],
-      note: "适合片头"
+      note: "适合片头",
+      status: "used",
+      timingSource: "manual",
+      reviewed: true
     }
   ],
   paperEdit: [{ id: "opening", title: "开场", highlightIds: ["hl-seg-1"] }]

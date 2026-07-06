@@ -3,6 +3,7 @@ import { AssetSidebar } from "./components/AssetSidebar";
 import { ExportInspector } from "./components/ExportInspector";
 import { FeedbackPanel } from "./components/FeedbackPanel";
 import { RoughCutQueue } from "./components/RoughCutQueue";
+import { SelectInspector } from "./components/SelectInspector";
 import { StoryboardCanvas } from "./components/StoryboardCanvas";
 import { TopBar, type ExportType } from "./components/TopBar";
 import { TranscriptionPanel, type TranscriptionSettings } from "./components/TranscriptionPanel";
@@ -12,10 +13,11 @@ import { defaultGroups, demoProject } from "./data/demoTranscript";
 import { storyboardTemplates } from "./data/storyboardTemplates";
 import type { FeedbackPayload } from "./types/feedback";
 import type { TranscriptionJob } from "./types/transcriptionJob";
-import type { Asset, FilterMode, Highlight, Project, SearchResult, StoryNote, TranscriptSegment } from "./types/transcript";
-import { downloadTextFile, exportPaperEditMarkdown, exportShotLogCsv, exportSrt, segmentToHighlight, speakerName } from "./utils/exporters";
+import type { Asset, FilterMode, Highlight, Project, SearchResult, SelectStatus, StoryNote, TimingSource, TranscriptSegment } from "./types/transcript";
+import { downloadTextFile, exportPaperEditMarkdown, exportRelinkManifestCsv, exportShotLogCsv, exportSrt, segmentToHighlight, speakerName } from "./utils/exporters";
 import { buildLocalProjectFile, exportFeedbackCsv, exportFeedbackJson, localProjectSchema, restoreLocalProjectFile } from "./utils/localProject";
 import { exportDaVinciEdl, exportFinalCutFcpxml, exportJianyingFcpxml, exportNleRelinkGuide, exportPremiereFcp7Xml } from "./utils/nleExporters";
+import { canEnterPaperEdit, normalizeProjectSelects, normalizeSelect } from "./utils/selects";
 import { formatShortTime } from "./utils/timecode";
 
 const emptyProject: Project = {
@@ -29,9 +31,10 @@ const emptyProject: Project = {
 };
 
 const defaultTranscriptionSettings: TranscriptionSettings = {
-  provider: "qwen-aliyun",
+  provider: "local-whisper",
   apiKey: "",
   bridgeUrl: "http://127.0.0.1:8787",
+  bridgeToken: "",
   language: "zh",
   speakerDiarization: true,
   wordTimestamps: true,
@@ -79,6 +82,8 @@ export default function App() {
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [speakerFilter, setSpeakerFilter] = useState("");
   const [focusedSegmentId, setFocusedSegmentId] = useState<string>();
+  const [activeSelectId, setActiveSelectId] = useState<string>();
+  const [selectQueueFilter, setSelectQueueFilter] = useState<SelectStatus | "all">("all");
   const [transcriptionOpen, setTranscriptionOpen] = useState(false);
   const [storyOpen, setStoryOpen] = useState(false);
   const [activeMobileTab, setActiveMobileTab] = useState<MobileTab>("transcript");
@@ -90,12 +95,7 @@ export default function App() {
   const [hasRecentProject, setHasRecentProject] = useState(() => Boolean(window.localStorage.getItem(recentProjectStorageKey)));
   const [transcriptionJobs, setTranscriptionJobs] = useState<TranscriptionJob[]>(() => readTranscriptionJobs());
   const [transcriptionSettings, setTranscriptionSettings] = useState<TranscriptionSettings>(() => {
-    try {
-      const saved = window.localStorage.getItem(transcriptionStorageKey);
-      return saved ? { ...defaultTranscriptionSettings, ...JSON.parse(saved) } : defaultTranscriptionSettings;
-    } catch {
-      return defaultTranscriptionSettings;
-    }
+    return readSavedTranscriptionSettings() ?? defaultTranscriptionSettings;
   });
   const [storyNotes, setStoryNotes] = useState<StoryNote[]>([
     {
@@ -107,7 +107,7 @@ export default function App() {
     },
     {
       id: "note_broll_pool",
-      groupId: "background",
+      groupId: "context",
       kind: "note",
       color: "blue",
       text: "可用 B-roll：旧照片、工作空间细节、环境大全景。"
@@ -126,26 +126,29 @@ export default function App() {
     () => new Set(project.paperEdit.flatMap((group) => group.highlightIds)),
     [project.paperEdit]
   );
-  const paperClipCount = paperHighlightIds.size;
+  const activeSelect = useMemo(
+    () => project.highlights.find((highlight) => highlight.id === activeSelectId) ?? project.highlights[0],
+    [activeSelectId, project.highlights]
+  );
+  const paperClipCount = useMemo(
+    () => project.highlights.filter((highlight) => paperHighlightIds.has(highlight.id) && highlight.status !== "rejected").length,
+    [paperHighlightIds, project.highlights]
+  );
+  const activeSelectAsset = activeSelect ? project.assets.find((asset) => asset.id === activeSelect.assetId) : undefined;
 
   const activeSegments = useMemo(() => {
     const assetId = activeAsset?.id;
-    const highlighted = new Set(project.highlights.map((highlight) => highlight.segmentId));
-    const paperSegmentIds = new Set(
-      project.highlights
-        .filter((highlight) => paperHighlightIds.has(highlight.id))
-        .map((highlight) => highlight.segmentId)
-    );
     return project.segments
       .filter((segment) => !assetId || segment.assetId === assetId)
       .filter((segment) => {
-        if (filterMode === "highlighted") return highlighted.has(segment.id);
-        if (filterMode === "paper") return paperSegmentIds.has(segment.id);
         if (filterMode === "speaker" && speakerFilter) return segment.speakerId === speakerFilter;
+        if (filterMode !== "all" && filterMode !== "speaker") {
+          return project.highlights.some((highlight) => highlight.segmentId === segment.id && highlight.status === filterMode);
+        }
         return true;
       })
       .sort((a, b) => a.start - b.start);
-  }, [activeAsset?.id, filterMode, paperHighlightIds, project.highlights, project.segments, speakerFilter]);
+  }, [activeAsset?.id, filterMode, project.highlights, project.segments, speakerFilter]);
 
   const activeAssetTranscriptCount = useMemo(
     () => project.segments.filter((segment) => segment.assetId === activeAsset?.id).length,
@@ -237,17 +240,19 @@ export default function App() {
       const raw = JSON.parse(await file.text());
       if (raw?.schema === localProjectSchema) {
         const restored = restoreLocalProjectFile(raw, project);
-        setProject(restored.project);
+        setProject(normalizeProjectSelects(restored.project));
         setStoryNotes(restored.storyNotes);
         setActiveAssetId(restored.project.assets[0]?.id);
         setFocusedSegmentId(undefined);
+        setActiveSelectId(undefined);
         setCurrentTime(0);
         return;
       }
       const normalized = normalizeProject(raw, project);
-      setProject(normalized);
+      setProject(normalizeProjectSelects(normalized));
       setActiveAssetId(normalized.assets[0]?.id);
       setFocusedSegmentId(undefined);
+      setActiveSelectId(undefined);
       setCurrentTime(0);
     } catch {
       window.alert("这个 JSON 无法识别。请导入包含 assets / speakers / segments 的逐字稿文件。");
@@ -256,7 +261,7 @@ export default function App() {
 
   function loadDemoTranscript() {
     setProject((current) => ({
-      ...demoProject,
+      ...normalizeProjectSelects(demoProject),
       assets: demoProject.assets.map((asset) => {
         const existing = current.assets.find((item) => item.fileName === asset.fileName || item.id === asset.id);
         return existing?.objectUrl ? { ...asset, objectUrl: existing.objectUrl, duration: existing.duration } : asset;
@@ -264,6 +269,7 @@ export default function App() {
     }));
     setActiveAssetId("interview-01");
     setFocusedSegmentId(undefined);
+    setActiveSelectId(undefined);
     setCurrentTime(0);
   }
 
@@ -300,6 +306,9 @@ export default function App() {
     if (type === "nle-guide") {
       downloadTextFile(`${baseName}_nle_import_guide.md`, exportNleRelinkGuide(project), "text/markdown;charset=utf-8");
     }
+    if (type === "relink-manifest") {
+      downloadTextFile(`${baseName}_relink_manifest.csv`, exportRelinkManifestCsv(project), "text/csv;charset=utf-8");
+    }
   }
 
   function updateSegmentText(segmentId: string, text: string) {
@@ -322,54 +331,112 @@ export default function App() {
     }));
   }
 
-  function addHighlight(segmentId: string) {
-    setProject((current) => ensureHighlight(current, segmentId).project);
-  }
-
-  function addTextHighlight(segmentId: string, text: string) {
-    setProject((current) => addSelectionHighlight(current, segmentId, text).project);
-  }
-
-  function addToPaper(segmentId: string) {
+  function createSelect(segmentId: string, status: SelectStatus, note?: string) {
     setProject((current) => {
-      const ensured = ensureHighlight(current, segmentId);
-      const highlightId = ensured.highlight.id;
-      if (ensured.project.paperEdit.some((group) => group.highlightIds.includes(highlightId))) {
-        return ensured.project;
-      }
+      const ensured = ensureHighlight(current, segmentId, status, note);
+      setActiveSelectId(ensured.highlight.id);
+      return ensured.project;
+    });
+  }
+
+  function createTextSelect(segmentId: string, text: string, status: SelectStatus, note?: string) {
+    setProject((current) => {
+      const ensured = addSelectionHighlight(current, segmentId, text, status, note);
+      setActiveSelectId(ensured.highlight.id);
+      return ensured.project;
+    });
+  }
+
+  function playTextSelection(segmentId: string, text: string) {
+    const segment = project.segments.find((item) => item.id === segmentId);
+    if (!segment) return;
+    const timing = estimateSelectionTiming(segment, text.trim());
+    seekTo(segment.id, timing.start);
+  }
+
+  function playSelect(highlight: Highlight) {
+    setActiveSelectId(highlight.id);
+    seekTo(highlight.segmentId, highlight.start);
+  }
+
+  function addSelectToPaper(highlightId: string) {
+    setProject((current) => {
+      const highlight = current.highlights.find((item) => item.id === highlightId);
+      if (!canEnterPaperEdit(highlight)) return current;
+      const exists = current.paperEdit.some((group) => group.highlightIds.includes(highlightId));
+      const paperEdit = exists
+        ? current.paperEdit
+        : current.paperEdit.map((group) =>
+            group.id === "inbox" ? { ...group, highlightIds: [...group.highlightIds, highlightId] } : group
+          );
+      setStoryOpen(true);
+      setActiveSelectId(highlightId);
       return {
-        ...ensured.project,
-        paperEdit: ensured.project.paperEdit.map((group) =>
-          group.id === "inbox" ? { ...group, highlightIds: [...group.highlightIds, highlightId] } : group
-        )
+        ...current,
+        highlights: current.highlights.map((item) =>
+          item.id === highlightId
+            ? {
+                ...item,
+                status: "used"
+              }
+            : item
+        ),
+        paperEdit
       };
     });
   }
 
-  function addTextToPaper(segmentId: string, text: string) {
+  function updateSelect(highlightId: string, patch: Partial<Highlight>) {
+    setProject((current) => ({
+      ...current,
+      highlights: current.highlights.map((highlight) => {
+        if (highlight.id !== highlightId) return highlight;
+        const next = normalizeSelect({ ...highlight, ...patch }, current.segments.find((segment) => segment.id === highlight.segmentId));
+        return next.end <= next.start ? highlight : next;
+      })
+    }));
+  }
+
+  function changeSelectStatus(highlightId: string, status: SelectStatus) {
     setProject((current) => {
-      const ensured = addSelectionHighlight(current, segmentId, text);
-      const highlightId = ensured.highlight.id;
-      if (ensured.project.paperEdit.some((group) => group.highlightIds.includes(highlightId))) {
-        return ensured.project;
-      }
+      const paperEdit =
+        status === "rejected"
+          ? current.paperEdit.map((group) => ({
+              ...group,
+              highlightIds: group.highlightIds.filter((id) => id !== highlightId)
+            }))
+          : current.paperEdit;
       return {
-        ...ensured.project,
-        paperEdit: ensured.project.paperEdit.map((group) =>
-          group.id === "inbox" ? { ...group, highlightIds: [...group.highlightIds, highlightId] } : group
-        )
+        ...current,
+        highlights: current.highlights.map((highlight) =>
+          highlight.id === highlightId
+            ? normalizeSelect(
+                {
+                  ...highlight,
+                  status,
+                  reviewed: status === "needs-review" ? false : highlight.reviewed
+                },
+                current.segments.find((segment) => segment.id === highlight.segmentId)
+              )
+            : highlight
+        ),
+        paperEdit
       };
     });
+    setActiveSelectId(highlightId);
   }
 
   function moveHighlight(highlightId: string, targetGroupId: string, targetIndex?: number) {
     setProject((current) => {
+      const highlight = current.highlights.find((item) => item.id === highlightId);
+      if (!canEnterPaperEdit(highlight)) return current;
       const without = current.paperEdit.map((group) => ({
         ...group,
         highlightIds: group.highlightIds.filter((id) => id !== highlightId)
       }));
       return {
         ...current,
+        highlights: current.highlights.map((item) => (item.id === highlightId ? { ...item, status: "used" } : item)),
         paperEdit: without.map((group) => {
           if (group.id !== targetGroupId) return group;
           const next = group.highlightIds.slice();
@@ -384,6 +451,9 @@ export default function App() {
   function removeFromPaper(highlightId: string) {
     setProject((current) => ({
       ...current,
+      highlights: current.highlights.map((highlight) =>
+        highlight.id === highlightId && highlight.status === "used" ? { ...highlight, status: "selected" } : highlight
+      ),
       paperEdit: current.paperEdit.map((group) => ({
         ...group,
         highlightIds: group.highlightIds.filter((id) => id !== highlightId)
@@ -392,12 +462,7 @@ export default function App() {
   }
 
   function updateHighlightNote(highlightId: string, note: string) {
-    setProject((current) => ({
-      ...current,
-      highlights: current.highlights.map((highlight) =>
-        highlight.id === highlightId ? { ...highlight, note } : highlight
-      )
-    }));
+    updateSelect(highlightId, { note });
   }
 
   function addStoryNote(groupId: string) {
@@ -465,7 +530,7 @@ export default function App() {
   }
 
   function addStoryGroup() {
-    const title = window.prompt("栏目名称", "新故事段落");
+    const title = window.prompt("结构段名称", "New beat");
     if (!title?.trim()) return;
     setProject((current) => ({
       ...current,
@@ -537,9 +602,17 @@ export default function App() {
     window.localStorage.setItem(layoutStorageKey, JSON.stringify(layoutSizes));
   }, [layoutSizes]);
 
-  function saveTranscriptionSettings() {
-    window.localStorage.setItem(transcriptionStorageKey, JSON.stringify(transcriptionSettings));
+  function saveTranscriptionSettings(includeKey: boolean) {
+    const previous = readSavedTranscriptionSettings();
+    const settingsToSave = includeKey ? transcriptionSettings : { ...transcriptionSettings, apiKey: previous?.apiKey ?? "" };
+    window.localStorage.setItem(transcriptionStorageKey, JSON.stringify(settingsToSave));
     setTranscriptionSaved(true);
+  }
+
+  function clearTranscriptionSettings() {
+    window.localStorage.removeItem(transcriptionStorageKey);
+    setTranscriptionSettings(defaultTranscriptionSettings);
+    setTranscriptionSaved(false);
   }
 
   async function createTranscriptionJob() {
@@ -554,11 +627,11 @@ export default function App() {
       return "这个模型需要先输入 API Key。";
     }
 
-    saveTranscriptionSettings();
+    saveTranscriptionSettings(false);
     const now = new Date().toISOString();
     const jobId = `job_${Date.now()}`;
     const bridgeUrl = normalizeBridgeUrl(transcriptionSettings.bridgeUrl);
-    const bridgeOnline = await checkTranscriptionBridge(bridgeUrl);
+    const bridgeOnline = await checkTranscriptionBridge(bridgeUrl, transcriptionSettings.bridgeToken);
     const job: TranscriptionJob = {
       id: jobId,
       assetId: activeAsset.id,
@@ -598,7 +671,7 @@ export default function App() {
 
   async function retryTranscriptionBridgeCheck(jobId: string) {
     const bridgeUrl = normalizeBridgeUrl(transcriptionSettings.bridgeUrl);
-    const bridgeOnline = await checkTranscriptionBridge(bridgeUrl);
+    const bridgeOnline = await checkTranscriptionBridge(bridgeUrl, transcriptionSettings.bridgeToken);
     const now = new Date().toISOString();
     setTranscriptionJobs((current) =>
       current.map((job) =>
@@ -682,10 +755,11 @@ export default function App() {
         return;
       }
       const restored = restoreLocalProjectFile(JSON.parse(saved), project);
-      setProject(restored.project);
+      setProject(normalizeProjectSelects(restored.project));
       setStoryNotes(restored.storyNotes);
       setActiveAssetId(restored.project.assets[0]?.id);
       setFocusedSegmentId(undefined);
+      setActiveSelectId(undefined);
       setCurrentTime(0);
     } catch {
       window.alert("最近项目无法恢复。请改用导入本地项目 JSON。");
@@ -737,7 +811,9 @@ export default function App() {
         jobs={transcriptionJobs.filter((job) => !activeAsset || job.assetId === activeAsset.id)}
         onClose={() => setTranscriptionOpen(false)}
         onChange={setTranscriptionSettings}
-        onSave={saveTranscriptionSettings}
+        onSaveSettings={() => saveTranscriptionSettings(false)}
+        onSaveKey={() => saveTranscriptionSettings(true)}
+        onClearSaved={clearTranscriptionSettings}
         onCreateJob={createTranscriptionJob}
         onRetryJob={retryTranscriptionBridgeCheck}
       />
@@ -812,12 +888,11 @@ export default function App() {
           highlights={project.highlights}
           paperHighlightIds={paperHighlightIds}
           onSeek={seekTo}
+          onPlayTextSelection={playTextSelection}
           onEditSegment={updateSegmentText}
           onRenameSpeaker={renameSpeaker}
-          onHighlight={addHighlight}
-          onHighlightText={addTextHighlight}
-          onAddToPaper={addToPaper}
-          onAddTextToPaper={addTextToPaper}
+          onCreateSelect={createSelect}
+          onCreateTextSelect={createTextSelect}
           onOpenTranscription={() => setTranscriptionOpen(true)}
           onVideoFile={importVideo}
           onLoadDemo={loadDemoTranscript}
@@ -884,11 +959,11 @@ export default function App() {
                     : asset
               )
             }));
-          }}
-        />
+            }}
+          />
           <ResizeHandle
             className="inspector-resizer video-queue"
-            label="调整视频监看和粗剪队列高度"
+            label="调整视频监看和 Select Inspector 高度"
             orientation="horizontal"
             value={layoutSizes.video}
             min={180}
@@ -908,18 +983,33 @@ export default function App() {
               }));
             }}
           />
+          <SelectInspector
+            select={activeSelect}
+            asset={activeSelectAsset}
+            speakerName={speakerName(project, activeSelect?.speakerId)}
+            inPaper={activeSelect ? paperHighlightIds.has(activeSelect.id) : false}
+            onUpdate={updateSelect}
+            onPlay={playSelect}
+            onAddToPaper={addSelectToPaper}
+          />
           <RoughCutQueue
             highlights={project.highlights}
             paperHighlightIds={paperHighlightIds}
+            activeSelectId={activeSelect?.id}
+            statusFilter={selectQueueFilter}
             speakers={project.speakers}
             assets={project.assets}
-            onSeek={(highlight) => seekTo(highlight.segmentId, highlight.start)}
+            onSeek={playSelect}
+            onSelect={setActiveSelectId}
+            onStatusFilterChange={setSelectQueueFilter}
+            onStatusChange={changeSelectStatus}
+            onAddToPaper={addSelectToPaper}
             onOpenStory={openStoryDrawer}
             onOpenExport={openExportInspector}
           />
           <ResizeHandle
             className="inspector-resizer queue-export"
-            label="调整粗剪队列和导出准备度高度"
+            label="调整 Selects Queue 和 Export Assistant 高度"
             orientation="horizontal"
             value={layoutSizes.roughCut}
             min={120}
@@ -945,15 +1035,15 @@ export default function App() {
           <ExportInspector project={project} paperHighlightIds={paperHighlightIds} onExport={handleExport} />
         </aside>
       </main>
-      {(storyOpen || paperClipCount > 0) && (
+      {(
         <section
           className={`story-drawer ${storyOpen ? "expanded" : "collapsed"}`}
-          aria-label="故事抽屉"
+          aria-label="Paper Edit Spine"
           style={{ "--story-drawer-height": `${layoutSizes.storyDrawer}px` } as CSSProperties}
         >
           <ResizeHandle
             className="story-drawer-resizer"
-            label="调整故事抽屉高度"
+            label="调整 Paper Edit Spine 高度"
             orientation="horizontal"
             value={layoutSizes.storyDrawer}
             min={96}
@@ -975,8 +1065,8 @@ export default function App() {
           />
           <header className="story-drawer-header">
             <div>
-              <span className="pane-title">Story Drawer</span>
-              <strong>{paperClipCount} 个片段从逐字稿生成</strong>
+              <span className="pane-title">Paper Edit</span>
+              <strong>{paperClipCount} 个 Select 在粗剪结构中</strong>
             </div>
             <div className="story-drawer-actions">
               <button
@@ -990,17 +1080,17 @@ export default function App() {
                   }));
                 }}
               >
-                {storyOpen ? "收起故事版" : "展开故事版"}
+                {storyOpen ? "收起 Paper Edit" : "展开 Paper Edit"}
               </button>
               <button type="button" onClick={openExportInspector} disabled={paperClipCount === 0}>
-                导出准备
+                Export Assistant
               </button>
             </div>
           </header>
           {storyOpen ? (
             <StoryboardCanvas
               groups={project.paperEdit}
-              highlights={project.highlights}
+              highlights={project.highlights.filter((highlight) => highlight.status !== "rejected")}
               notes={storyNotes}
               speakers={project.speakers}
               assets={project.assets}
@@ -1026,7 +1116,7 @@ export default function App() {
           ) : (
             <div className="story-drawer-strip">
               {project.highlights
-                .filter((highlight) => paperHighlightIds.has(highlight.id))
+                .filter((highlight) => paperHighlightIds.has(highlight.id) && highlight.status !== "rejected")
                 .slice(0, 5)
                 .map((highlight) => (
                   <button key={highlight.id} type="button" className="story-strip-card" onClick={() => seekTo(highlight.segmentId, highlight.start)}>
@@ -1034,6 +1124,9 @@ export default function App() {
                     <strong>{highlight.text}</strong>
                   </button>
                 ))}
+              {paperClipCount === 0 && (
+                <div className="story-strip-empty">Paper Edit Spine 为空。先在逐字稿中创建 Select，再加入 Paper Edit。</div>
+              )}
             </div>
           )}
         </section>
@@ -1046,7 +1139,7 @@ export default function App() {
           Video
         </button>
         <button type="button" className={activeMobileTab === "story" ? "active" : ""} onClick={openStoryDrawer}>
-          Story
+          Paper
         </button>
         <button type="button" className={activeMobileTab === "export" ? "active" : ""} onClick={() => setActiveMobileTab("export")}>
           Export
@@ -1056,14 +1149,41 @@ export default function App() {
   );
 }
 
-function ensureHighlight(project: Project, segmentId: string): { project: Project; highlight: Highlight } {
+function ensureHighlight(project: Project, segmentId: string, status: SelectStatus = "selected", note?: string): { project: Project; highlight: Highlight } {
   const segment = project.segments.find((item) => item.id === segmentId);
   if (!segment) throw new Error(`Missing segment ${segmentId}`);
-  const existing = project.highlights.find(
+  const existingIndex = project.highlights.findIndex(
     (highlight) => highlight.id === `hl_${segmentId}` || (highlight.segmentId === segmentId && highlight.text === segment.text)
   );
-  if (existing) return { project, highlight: existing };
-  const highlight = segmentToHighlight(project, segment);
+  if (existingIndex >= 0) {
+    const highlight = normalizeSelect(
+      {
+        ...project.highlights[existingIndex],
+        status,
+        note: note ?? project.highlights[existingIndex].note,
+        timingSource: "manual",
+        reviewed: status === "needs-review" ? false : true
+      },
+      segment
+    );
+    return {
+      project: {
+        ...project,
+        highlights: project.highlights.map((item, index) => (index === existingIndex ? highlight : item))
+      },
+      highlight
+    };
+  }
+  const highlight = normalizeSelect(
+    {
+      ...segmentToHighlight(project, segment),
+      status,
+      note,
+      timingSource: "manual",
+      reviewed: status === "needs-review" ? false : true
+    },
+    segment
+  );
   return { project: { ...project, highlights: [...project.highlights, highlight] }, highlight };
 }
 
@@ -1155,15 +1275,40 @@ function clamp(value: number, min: number, max: number) {
   return Math.min(max, Math.max(min, value));
 }
 
-function addSelectionHighlight(project: Project, segmentId: string, selectedText: string): { project: Project; highlight: Highlight } {
+function addSelectionHighlight(
+  project: Project,
+  segmentId: string,
+  selectedText: string,
+  requestedStatus: SelectStatus = "selected",
+  note?: string
+): { project: Project; highlight: Highlight } {
   const segment = project.segments.find((item) => item.id === segmentId);
   if (!segment) throw new Error(`Missing segment ${segmentId}`);
   const text = selectedText.trim();
-  if (!text || text === segment.text) return ensureHighlight(project, segmentId);
-  const existing = project.highlights.find((highlight) => highlight.segmentId === segmentId && highlight.text === text);
-  if (existing) return { project, highlight: existing };
+  if (!text || text === segment.text) return ensureHighlight(project, segmentId, requestedStatus, note);
+  const existingIndex = project.highlights.findIndex((highlight) => highlight.segmentId === segmentId && highlight.text === text);
   const timing = estimateSelectionTiming(segment, text);
-  const highlight: Highlight = {
+  const status = requestedStatus === "selected" && timing.timingSource === "segment-estimate" ? "needs-review" : requestedStatus;
+  if (existingIndex >= 0) {
+    const highlight = normalizeSelect(
+      {
+        ...project.highlights[existingIndex],
+        status,
+        note: note ?? project.highlights[existingIndex].note,
+        timingSource: timing.timingSource,
+        reviewed: timing.timingSource === "word" && status !== "needs-review"
+      },
+      segment
+    );
+    return {
+      project: {
+        ...project,
+        highlights: project.highlights.map((item, index) => (index === existingIndex ? highlight : item))
+      },
+      highlight
+    };
+  }
+  const highlight: Highlight = normalizeSelect({
     id: `hl_${segment.id}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     segmentId: segment.id,
     assetId: segment.assetId,
@@ -1171,12 +1316,19 @@ function addSelectionHighlight(project: Project, segmentId: string, selectedText
     end: timing.end,
     text,
     speakerId: segment.speakerId,
-    tags: ["text-selection"]
-  };
+    tags: ["text-selection"],
+    note,
+    status,
+    timingSource: timing.timingSource,
+    reviewed: timing.timingSource === "word" && status !== "needs-review",
+    createdFromTextSelection: true,
+    originalStart: segment.start,
+    originalEnd: segment.end
+  }, segment);
   return { project: { ...project, highlights: [...project.highlights, highlight] }, highlight };
 }
 
-function estimateSelectionTiming(segment: TranscriptSegment, selectedText: string) {
+function estimateSelectionTiming(segment: TranscriptSegment, selectedText: string): { start: number; end: number; timingSource: TimingSource } {
   const startIndex = Math.max(0, segment.text.indexOf(selectedText));
   const endIndex = startIndex + selectedText.length;
   const duration = Math.max(0.1, segment.end - segment.start);
@@ -1193,7 +1345,8 @@ function estimateSelectionTiming(segment: TranscriptSegment, selectedText: strin
     if (overlapping.length > 0) {
       return {
         start: overlapping[0].start,
-        end: overlapping[overlapping.length - 1].end
+        end: overlapping[overlapping.length - 1].end,
+        timingSource: "word"
       };
     }
   }
@@ -1203,7 +1356,8 @@ function estimateSelectionTiming(segment: TranscriptSegment, selectedText: strin
   const endRatio = Math.min(1, endIndex / textLength);
   return {
     start: segment.start + duration * startRatio,
-    end: segment.start + duration * Math.max(endRatio, startRatio + 0.05)
+    end: segment.start + duration * Math.max(endRatio, startRatio + 0.05),
+    timingSource: "segment-estimate"
   };
 }
 
@@ -1237,7 +1391,7 @@ function normalizeProject(raw: any, current: Project): Project {
     id: String(speaker.id ?? speaker.speakerId),
     name: String(speaker.name ?? speaker.label ?? speaker.speakerId ?? "未命名")
   }));
-  const segments = rawSegments.map((segment: any, index: number) => ({
+  const segments: TranscriptSegment[] = rawSegments.map((segment: any, index: number) => ({
     id: String(segment.id ?? `seg_${index + 1}`),
     assetId: String(segment.assetId ?? assets[0]?.id ?? "asset_1"),
     speakerId: segment.speakerId ? String(segment.speakerId) : undefined,
@@ -1245,7 +1399,34 @@ function normalizeProject(raw: any, current: Project): Project {
     end: Number(segment.end ?? segment.start ?? 0),
     text: String(segment.text ?? ""),
     words: Array.isArray(segment.words) ? segment.words : undefined
-  })) satisfies TranscriptSegment[];
+  }));
+  const segmentMap = new Map(segments.map((segment) => [segment.id, segment]));
+  const highlights: Highlight[] = (Array.isArray(raw.highlights) ? raw.highlights : []).map((highlight: any, index: number) =>
+    normalizeSelect(
+      {
+        ...highlight,
+        id: String(highlight.id ?? `highlight_${index + 1}`),
+        segmentId: String(highlight.segmentId ?? ""),
+        assetId: String(highlight.assetId ?? segmentMap.get(String(highlight.segmentId ?? ""))?.assetId ?? assets[0]?.id ?? "asset_1"),
+        start: Number(highlight.start ?? 0),
+        end: Number(highlight.end ?? highlight.start ?? 0),
+        text: String(highlight.text ?? ""),
+        tags: Array.isArray(highlight.tags) ? highlight.tags : []
+      },
+      segmentMap.get(String(highlight.segmentId ?? ""))
+    )
+  );
+  const rawPaperEdit = Array.isArray(raw.paperEdit) ? raw.paperEdit : [];
+  const highlightIds = new Set(highlights.map((highlight) => highlight.id));
+  const paperEdit = rawPaperEdit.length
+    ? rawPaperEdit.map((group: any, index: number) => ({
+        id: String(group.id ?? `group_${index + 1}`),
+        title: String(group.title ?? `段落 ${index + 1}`),
+        highlightIds: Array.isArray(group.highlightIds)
+          ? group.highlightIds.map((id: unknown) => String(id)).filter((id: string) => highlightIds.has(id))
+          : []
+      }))
+    : defaultGroups.map((group) => ({ ...group, highlightIds: [] }));
 
   return {
     id: String(raw.projectId ?? raw.id ?? "local-project"),
@@ -1253,8 +1434,8 @@ function normalizeProject(raw: any, current: Project): Project {
     assets,
     speakers,
     segments,
-    highlights: [],
-    paperEdit: defaultGroups.map((group) => ({ ...group, highlightIds: [] }))
+    highlights,
+    paperEdit
   };
 }
 
@@ -1280,11 +1461,22 @@ function readTranscriptionJobs(): TranscriptionJob[] {
   }
 }
 
-async function checkTranscriptionBridge(bridgeUrl: string): Promise<boolean> {
+function readSavedTranscriptionSettings(): TranscriptionSettings | undefined {
+  try {
+    const saved = window.localStorage.getItem(transcriptionStorageKey);
+    if (!saved) return undefined;
+    return { ...defaultTranscriptionSettings, ...JSON.parse(saved) };
+  } catch {
+    return undefined;
+  }
+}
+
+async function checkTranscriptionBridge(bridgeUrl: string, bridgeToken: string): Promise<boolean> {
   try {
     const response = await fetch(`${bridgeUrl}/health`, {
       method: "GET",
-      cache: "no-store"
+      cache: "no-store",
+      headers: bridgeToken.trim() ? { "X-Bridge-Token": bridgeToken.trim() } : undefined
     });
     return response.ok;
   } catch {
@@ -1325,7 +1517,8 @@ async function submitTranscriptionToBridge(
       method: "POST",
       headers: {
         "Content-Type": mediaBlob.type || "application/octet-stream",
-        ...(settings.apiKey.trim() ? { "X-API-Key": settings.apiKey.trim() } : {})
+        ...(settings.apiKey.trim() ? { "X-API-Key": settings.apiKey.trim() } : {}),
+        ...(settings.bridgeToken.trim() ? { "X-Bridge-Token": settings.bridgeToken.trim() } : {})
       },
       body: mediaBlob
     });

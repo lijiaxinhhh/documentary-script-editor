@@ -7,6 +7,7 @@ import path from "node:path";
 
 const port = Number(process.env.TRANSCRIPTION_BRIDGE_PORT ?? 8787);
 const maxUploadBytes = Number(process.env.TRANSCRIPTION_BRIDGE_MAX_BYTES ?? 3 * 1024 * 1024 * 1024);
+const bridgeToken = String(process.env.TRANSCRIPTION_BRIDGE_TOKEN ?? "").trim();
 
 const server = http.createServer(async (request, response) => {
   setCorsHeaders(request, response);
@@ -21,6 +22,7 @@ const server = http.createServer(async (request, response) => {
     const url = new URL(request.url ?? "/", `http://${request.headers.host ?? "127.0.0.1"}`);
 
     if (url.pathname === "/health" && request.method === "GET") {
+      if (!authorizeBridgeRequest(request, response)) return;
       writeJson(response, 200, {
         ok: true,
         service: "documentary-transcription-bridge",
@@ -30,6 +32,7 @@ const server = http.createServer(async (request, response) => {
     }
 
     if (url.pathname === "/transcribe" && request.method === "POST") {
+      if (!authorizeBridgeRequest(request, response)) return;
       await handleTranscribe(request, response, url);
       return;
     }
@@ -49,7 +52,22 @@ const server = http.createServer(async (request, response) => {
 
 server.listen(port, "127.0.0.1", () => {
   console.log(`Transcription bridge listening on http://127.0.0.1:${port}`);
+  if (bridgeToken) {
+    console.log("Transcription bridge pairing token is enabled.");
+  }
 });
+
+function authorizeBridgeRequest(request, response) {
+  if (!bridgeToken) return true;
+  const provided = request.headers["x-bridge-token"];
+  if (provided === bridgeToken) return true;
+  writeJson(response, 401, {
+    ok: false,
+    code: "BRIDGE_TOKEN_REQUIRED",
+    message: "本机转写助手已启用配对码。请在网页高级设置里输入正确的配对码。"
+  });
+  return false;
+}
 
 async function handleTranscribe(request, response, url) {
   const provider = url.searchParams.get("provider") ?? "";
@@ -594,7 +612,7 @@ function setCorsHeaders(request, response) {
   response.setHeader("Access-Control-Allow-Origin", typeof origin === "string" ? origin : "*");
   response.setHeader("Vary", "Origin");
   response.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  response.setHeader("Access-Control-Allow-Headers", "Content-Type,X-API-Key");
+  response.setHeader("Access-Control-Allow-Headers", "Content-Type,X-API-Key,X-Bridge-Token");
   response.setHeader("Access-Control-Max-Age", "600");
 }
 

@@ -79,7 +79,7 @@ export function VideoPane({
           <div className="video-next-step">
             <span>素材已导入</span>
             <strong>下一步：生成逐字稿</strong>
-            <p>像 Reduct 一样先把视频变成可搜索、可高亮、可剪辑的文字。</p>
+            <p>像 Reduct 一样先把视频变成可搜索、可复核、可组织进 Paper Edit 的文字。</p>
             <button type="button" onClick={onOpenTranscription}>
               <Mic2 size={16} />
               开始转写 / 输入 Key

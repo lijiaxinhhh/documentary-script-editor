@@ -1,12 +1,12 @@
 import type { Project } from "../types/transcript";
 
 export const defaultGroups = [
-  { id: "inbox", title: "待归类", highlightIds: [] },
-  { id: "opening", title: "开场", highlightIds: [] },
-  { id: "background", title: "背景", highlightIds: [] },
-  { id: "conflict", title: "冲突", highlightIds: [] },
-  { id: "turning", title: "转折", highlightIds: [] },
-  { id: "ending", title: "结尾", highlightIds: [] }
+  { id: "opening", title: "Opening", highlightIds: [] },
+  { id: "context", title: "Context", highlightIds: [] },
+  { id: "conflict", title: "Conflict", highlightIds: [] },
+  { id: "turn", title: "Turn", highlightIds: [] },
+  { id: "resolution", title: "Resolution", highlightIds: [] },
+  { id: "inbox", title: "Unsorted Selects", highlightIds: [] }
 ];
 
 export const demoProject: Project = {

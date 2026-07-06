@@ -2,9 +2,7 @@ import {
   Ban,
   Check,
   FileVideo2,
-  Highlighter,
   KeyRound,
-  MessageSquarePlus,
   Pencil,
   Play,
   Plus,
@@ -15,7 +13,7 @@ import {
   X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { Highlight, Speaker, TranscriptSegment } from "../types/transcript";
+import type { Highlight, SelectStatus, Speaker, TranscriptSegment } from "../types/transcript";
 import { formatShortTime } from "../utils/timecode";
 
 type TranscriptPaneProps = {
@@ -26,12 +24,11 @@ type TranscriptPaneProps = {
   highlights: Highlight[];
   paperHighlightIds: Set<string>;
   onSeek: (segmentId: string, start: number) => void;
+  onPlayTextSelection: (segmentId: string, text: string) => void;
   onEditSegment: (segmentId: string, text: string) => void;
   onRenameSpeaker: (speakerId: string, name: string) => void;
-  onHighlight: (segmentId: string) => void;
-  onHighlightText: (segmentId: string, text: string) => void;
-  onAddToPaper: (segmentId: string) => void;
-  onAddTextToPaper: (segmentId: string, text: string) => void;
+  onCreateSelect: (segmentId: string, status: SelectStatus, note?: string) => void;
+  onCreateTextSelect: (segmentId: string, text: string, status: SelectStatus, note?: string) => void;
   onOpenTranscription: () => void;
   onVideoFile?: (file: File) => void;
   onLoadDemo?: () => void;
@@ -45,12 +42,11 @@ export function TranscriptPane({
   highlights,
   paperHighlightIds,
   onSeek,
+  onPlayTextSelection,
   onEditSegment,
   onRenameSpeaker,
-  onHighlight,
-  onHighlightText,
-  onAddToPaper,
-  onAddTextToPaper,
+  onCreateSelect,
+  onCreateTextSelect,
   onOpenTranscription,
   onVideoFile,
   onLoadDemo
@@ -64,14 +60,13 @@ export function TranscriptPane({
     x: number;
     y: number;
   }>();
-  const [mutedSegmentIds, setMutedSegmentIds] = useState<Set<string>>(() => new Set());
   const activeRef = useRef<HTMLDivElement | null>(null);
   const paneRef = useRef<HTMLElement | null>(null);
   const importInputRef = useRef<HTMLInputElement | null>(null);
 
   const speakerMap = useMemo(() => new Map(speakers.map((speaker) => [speaker.id, speaker.name])), [speakers]);
   const highlightedSegments = useMemo(
-    () => new Set(highlights.map((highlight) => highlight.segmentId)),
+    () => new Set(highlights.filter((highlight) => highlight.status !== "rejected").map((highlight) => highlight.segmentId)),
     [highlights]
   );
 
@@ -105,10 +100,9 @@ export function TranscriptPane({
     }, 0);
   }
 
-  function makeClipFromSelection() {
+  function makeSelectFromSelection(status: SelectStatus, note?: string) {
     if (!selectionToolbar) return;
-    onHighlightText(selectionToolbar.segmentId, selectionToolbar.text);
-    onAddTextToPaper(selectionToolbar.segmentId, selectionToolbar.text);
+    onCreateTextSelect(selectionToolbar.segmentId, selectionToolbar.text, status, note);
     clearSelectionToolbar();
   }
 
@@ -118,18 +112,18 @@ export function TranscriptPane({
         <div>
           <span className="pane-title">逐字稿</span>
           <span className="pane-count">{segments.length} 段</span>
-          {segments.length > 0 && <span className="pane-hint">选中文字，生成可剪视频片段</span>}
+          {segments.length > 0 && <span className="pane-hint">选中文字，生成可复核 Select</span>}
         </div>
-        <button type="button" onClick={onOpenTranscription} title="视频转文字与 Key 设置">
+        <button type="button" onClick={onOpenTranscription} title="转写助手 / 隐私路径">
           <KeyRound size={14} />
-          转写预检
+          转写助手
         </button>
       </header>
       <div className="segments-list">
         {segments.length === 0 ? (
           <div className="empty-state large transcript-empty">
             <strong>导入本地视频，生成可剪的逐字稿。</strong>
-            <p>点击文字跳视频，选择文字生成粗剪片段，再整理故事结构。</p>
+            <p>点击文字跳视频，选择文字生成 Select，再放入 Paper Edit。</p>
             <div className="empty-actions">
               <button type="button" className="empty-primary-action" onClick={() => importInputRef.current?.click()}>
                 <FileVideo2 size={16} />
@@ -140,7 +134,7 @@ export function TranscriptPane({
                 载入样例项目
               </button>
             </div>
-            <span>模型和本机执行层会在“转写预检”里设置。</span>
+            <span>也可以导入已有逐字稿；API Key 不是默认必需项。</span>
             <input
               ref={importInputRef}
               className="hidden-input"
@@ -162,12 +156,12 @@ export function TranscriptPane({
               .filter((highlight) => highlight.segmentId === segment.id)
               .map((highlight) => highlight.id);
             const inPaper = segmentHighlightIds.some((highlightId) => paperHighlightIds.has(highlightId));
-            const isMuted = mutedSegmentIds.has(segment.id);
+            const rejectedCount = highlights.filter((highlight) => highlight.segmentId === segment.id && highlight.status === "rejected").length;
             return (
               <article
                 key={segment.id}
                 ref={isActive ? activeRef : undefined}
-                className={`segment-card ${isActive ? "active" : ""} ${isHighlighted ? "highlighted" : ""} ${isMuted ? "muted" : ""}`}
+                className={`segment-card ${isActive ? "active" : ""} ${isHighlighted ? "highlighted" : ""} ${rejectedCount ? "muted" : ""}`}
               >
                 <div className="segment-meta-row">
                   <button
@@ -192,6 +186,7 @@ export function TranscriptPane({
                     {speakerName}
                   </button>
                   <span className="asset-source">原素材片段</span>
+                  {rejectedCount > 0 && <span className="asset-source rejected">Rejected {rejectedCount}</span>}
                 </div>
                 {editingId === segment.id ? (
                   <div className="segment-editor">
@@ -243,25 +238,37 @@ export function TranscriptPane({
                     type="button"
                     onClick={() => {
                       const selected = getSelectedTextInsideSegment(segment.text);
-                      if (selected) onHighlightText(segment.id, selected);
-                      else onHighlight(segment.id);
+                      if (selected) onCreateTextSelect(segment.id, selected, "selected");
+                      else onCreateSelect(segment.id, "selected");
                     }}
-                    title="高亮选中文字或整段"
+                    title="把选中文字或整段加入 Selects"
                   >
-                    <Highlighter size={15} />
-                    {isHighlighted ? "已高亮" : "高亮"}
+                    <Scissors size={15} />
+                    {isHighlighted ? "已选" : "加入 Selects"}
                   </button>
                   <button
                     type="button"
                     onClick={() => {
                       const selected = getSelectedTextInsideSegment(segment.text);
-                      if (selected) onAddTextToPaper(segment.id, selected);
-                      else onAddToPaper(segment.id);
+                      if (selected) onCreateTextSelect(segment.id, selected, "maybe");
+                      else onCreateSelect(segment.id, "maybe");
                     }}
-                    title="把选中文字或整段加入故事版"
+                    title="标为 Maybe"
                   >
                     <Plus size={15} />
-                    {inPaper ? "已入稿" : "入稿"}
+                    {inPaper ? "已入 Paper" : "Maybe"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const selected = getSelectedTextInsideSegment(segment.text);
+                      if (selected) onCreateTextSelect(segment.id, selected, "rejected");
+                      else onCreateSelect(segment.id, "rejected");
+                    }}
+                    title="Reject 这个选段"
+                  >
+                    <Ban size={15} />
+                    Reject
                   </button>
                 </div>
               </article>
@@ -276,43 +283,37 @@ export function TranscriptPane({
           role="toolbar"
           aria-label="选中文字工具栏"
         >
-          <button type="button" onClick={() => onSeek(selectionToolbar.segmentId, selectionToolbar.start)}>
+          <button type="button" onClick={() => onPlayTextSelection(selectionToolbar.segmentId, selectionToolbar.text)}>
             <Play size={14} />
-            播放
+            播放选中范围
           </button>
-          <button type="button" className="toolbar-primary" onClick={makeClipFromSelection}>
+          <button type="button" className="toolbar-primary" onClick={() => makeSelectFromSelection("selected")}>
             <Scissors size={14} />
-            设为片段
+            加入 Selects
           </button>
           <button
             type="button"
-            onClick={() => {
-              setMutedSegmentIds((current) => new Set([...current, selectionToolbar.segmentId]));
-              clearSelectionToolbar();
-            }}
+            onClick={() => makeSelectFromSelection("maybe")}
+          >
+            <Plus size={14} />
+            标为 Maybe
+          </button>
+          <button
+            type="button"
+            onClick={() => makeSelectFromSelection("rejected")}
           >
             <Ban size={14} />
-            跳过
+            Reject
           </button>
           <button
             type="button"
             onClick={() => {
-              onHighlightText(selectionToolbar.segmentId, selectionToolbar.text);
-              clearSelectionToolbar();
+              const note = window.prompt("添加标签 / 备注", "");
+              makeSelectFromSelection("selected", note?.trim() || undefined);
             }}
           >
             <Tag size={14} />
-            打标签
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              onAddTextToPaper(selectionToolbar.segmentId, selectionToolbar.text);
-              clearSelectionToolbar();
-            }}
-          >
-            <MessageSquarePlus size={14} />
-            加入故事
+            添加标签 / 备注
           </button>
         </div>
       )}

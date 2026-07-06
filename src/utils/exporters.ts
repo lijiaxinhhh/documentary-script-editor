@@ -1,4 +1,5 @@
 import type { Highlight, Project, TranscriptSegment } from "../types/transcript";
+import { isExportableSelect, statusLabel, timingSourceLabel } from "./selects";
 import { formatDisplayTime, formatSrtTime } from "./timecode";
 
 export function downloadTextFile(fileName: string, content: string, type: string): void {
@@ -41,13 +42,17 @@ export function exportPaperEditMarkdown(project: Project): string {
 
     group.highlightIds.forEach((highlightId) => {
       const highlight = highlightMap.get(highlightId);
-      if (!highlight) return;
+      if (!isExportableSelect(highlight)) return;
       const speaker = speakerName(project, highlight.speakerId) || "未命名发言人";
       const asset = assetMap.get(highlight.assetId);
       lines.push(
         `### ${formatDisplayTime(highlight.start)} - ${formatDisplayTime(highlight.end)} | ${speaker} | ${
           asset?.fileName ?? "未知素材"
         }`,
+        "",
+        `- Select status: ${statusLabel(highlight.status)}`,
+        `- Timing source: ${timingSourceLabel(highlight.timingSource)}${highlight.reviewed ? " · reviewed" : " · needs review"}`,
+        `- Rating: ${highlight.rating ? `${highlight.rating}/5` : "unrated"}`,
         "",
         highlight.text,
         ""
@@ -62,7 +67,20 @@ export function exportPaperEditMarkdown(project: Project): string {
 }
 
 export function exportShotLogCsv(project: Project): string {
-  const header = ["file", "start", "end", "speaker", "text", "summary", "tags", "rating", "notes"];
+  const header = [
+    "file",
+    "start",
+    "end",
+    "speaker",
+    "text",
+    "select_status",
+    "timing_source",
+    "reviewed",
+    "summary",
+    "tags",
+    "rating",
+    "notes"
+  ];
   const assetMap = new Map(project.assets.map((asset) => [asset.id, asset]));
   const rows = project.segments
     .slice()
@@ -75,14 +93,45 @@ export function exportShotLogCsv(project: Project): string {
         formatDisplayTime(segment.end),
         speakerName(project, segment.speakerId),
         segment.text,
+        highlight ? statusLabel(highlight.status) : "",
+        highlight ? timingSourceLabel(highlight.timingSource) : "",
+        highlight ? String(highlight.reviewed) : "",
         "",
         highlight?.tags.join("|") ?? "",
-        "",
+        highlight?.rating ? String(highlight.rating) : "",
         highlight?.note ?? ""
       ];
     });
 
   return [header, ...rows].map((row) => row.map(escapeCsv).join(",")).join("\n");
+}
+
+export function exportRelinkManifestCsv(project: Project): string {
+  const highlightMap = new Map(project.highlights.map((highlight) => [highlight.id, highlight]));
+  const usedHighlights = project.paperEdit
+    .flatMap((group) => group.highlightIds)
+    .map((highlightId) => highlightMap.get(highlightId))
+    .filter(isExportableSelect);
+  const rows = project.assets.map((asset) => {
+    const clips = usedHighlights.filter((highlight) => highlight.assetId === asset.id);
+    const warnings = [
+      !asset.linkedFileName && !asset.objectUrl ? "offline media" : "",
+      asset.mediaWarning ?? "",
+      clips.some((highlight) => highlight.timingSource === "segment-estimate") ? "estimated timing clips" : "",
+      clips.some((highlight) => !highlight.reviewed) ? "needs review clips" : ""
+    ].filter(Boolean);
+    return [
+      asset.fileName,
+      asset.duration ? formatDisplayTime(asset.duration) : "",
+      asset.linkedFileName ?? "",
+      String(clips.length),
+      warnings.join(" | ")
+    ];
+  });
+
+  return [["asset_file", "duration", "linked_file", "used_clip_count", "warnings"], ...rows]
+    .map((row) => row.map(escapeCsv).join(","))
+    .join("\n");
 }
 
 export function segmentToHighlight(project: Project, segment: TranscriptSegment): Highlight {
@@ -94,7 +143,13 @@ export function segmentToHighlight(project: Project, segment: TranscriptSegment)
     end: segment.end,
     text: segment.text,
     speakerId: segment.speakerId,
-    tags: []
+    tags: [],
+    status: "selected",
+    timingSource: "manual",
+    reviewed: true,
+    createdFromTextSelection: false,
+    originalStart: segment.start,
+    originalEnd: segment.end
   };
 }
 

@@ -22,7 +22,8 @@ export type ExportType =
   | "davinci"
   | "davinci-edl"
   | "jianying"
-  | "nle-guide";
+  | "nle-guide"
+  | "relink-manifest";
 
 type TopBarProps = {
   projectName: string;
@@ -94,7 +95,7 @@ export function TopBar({
         </button>
         <button type="button" onClick={onOpenTranscription}>
           <Captions size={16} />
-          转写
+          转写助手
         </button>
         <button type="button" onClick={onSearchFocus}>
           <Search size={16} />
@@ -102,11 +103,11 @@ export function TopBar({
         </button>
         <button type="button" onClick={onOpenStory}>
           <PanelBottomOpen size={16} />
-          故事
+          Paper Edit
         </button>
-        <button type="button" disabled={!exportReady} onClick={onOpenExport} title={exportReady ? "查看导出准备度" : "先从逐字稿生成粗剪片段"}>
+        <button type="button" disabled={!exportReady} onClick={onOpenExport} title={exportReady ? "查看 Export Assistant" : "先把 Select 加入 Paper Edit"}>
           <Download size={16} />
-          导出
+          Export
         </button>
         <details className="settings-menu">
           <summary aria-label="设置">

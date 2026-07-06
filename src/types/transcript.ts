@@ -30,6 +30,10 @@ export type TranscriptSegment = {
   words?: WordTiming[];
 };
 
+export type SelectStatus = "selected" | "maybe" | "rejected" | "used" | "needs-review";
+
+export type TimingSource = "word" | "segment-estimate" | "manual";
+
 export type Highlight = {
   id: string;
   segmentId: string;
@@ -40,6 +44,16 @@ export type Highlight = {
   speakerId?: string;
   tags: string[];
   note?: string;
+  status: SelectStatus;
+  timingSource: TimingSource;
+  reviewed: boolean;
+  rating?: 1 | 2 | 3 | 4 | 5;
+  rejectReason?: string;
+  createdFromTextSelection?: boolean;
+  inPadding?: number;
+  outPadding?: number;
+  originalStart?: number;
+  originalEnd?: number;
 };
 
 export type PaperEditGroup = {
@@ -76,4 +90,4 @@ export type SearchResult = {
   speakerName: string;
 };
 
-export type FilterMode = "all" | "highlighted" | "paper" | "speaker";
+export type FilterMode = "all" | SelectStatus | "speaker";

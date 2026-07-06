@@ -128,7 +128,7 @@ export function StoryboardCanvas({
 
   return (
     <section className="storyboard-shell">
-      <div className="story-toolbar" aria-label="故事版工具栏">
+      <div className="story-toolbar" aria-label="Paper Edit 工具栏">
         <button type="button" title="便签" onClick={() => onAddNote(groups[0]?.id ?? "inbox")}>
           <StickyNote size={18} />
           <span>便签</span>
@@ -139,7 +139,7 @@ export function StoryboardCanvas({
         </button>
         <button type="button" title="即将支持直接添加片段" disabled>
           <Video size={18} />
-          <span>片段</span>
+          <span>Select</span>
         </button>
         <button type="button" title="添加图片资料卡" onClick={() => requestImage(groups[0]?.id ?? "inbox")}>
           <ImagePlus size={18} />
@@ -161,27 +161,27 @@ export function StoryboardCanvas({
         <div className="storyboard-panel">
           <div className="storyboard-header">
             <div>
-              <span className="pane-title">故事结构</span>
-              <span className="board-count">{highlights.length} 个视频片段 · {notes.length} 张便签</span>
-              <span className="board-count">粗剪约 {formatShortTime(totalDuration)}</span>
+              <span className="pane-title">Paper Edit</span>
+              <span className="board-count">{highlights.length} 个 Select · {notes.length} 张便签</span>
+              <span className="board-count">Assembly 约 {formatShortTime(totalDuration)}</span>
             </div>
             <div className="story-controls">
               <select
-                aria-label="故事版模板"
+                aria-label="Paper Edit 模板"
                 defaultValue=""
                 onChange={(event) => {
                   if (event.target.value) onApplyTemplate(event.target.value);
                   event.target.value = "";
                 }}
               >
-                <option value="">选择模板</option>
+                <option value="">选择结构模板</option>
                 {storyboardTemplates.map((template) => (
                   <option key={template.id} value={template.id}>
                     {template.name}
                   </option>
                 ))}
               </select>
-              <span>{unsortedCount} 待归类</span>
+              <span>{unsortedCount} Unsorted Selects</span>
               <button type="button" onClick={() => setZoom((value) => Math.max(0.68, value - 0.08))} title="缩小">
                 <Minus size={15} />
               </button>
@@ -227,7 +227,7 @@ export function StoryboardCanvas({
               })}
               <button type="button" className="add-column-card" onClick={onAddGroup}>
                 <Plus size={18} />
-                新增段落
+                新增结构段
               </button>
             </div>
           </div>
@@ -323,7 +323,7 @@ function StoryColumn({
           type="button"
           className="story-title-button"
           onClick={() => {
-            const title = window.prompt("栏目名称", group.title);
+            const title = window.prompt("结构段名称", group.title);
             if (title?.trim()) onRenameGroup(group.id, title.trim());
           }}
         >
@@ -416,7 +416,7 @@ function StoryColumn({
           ))}
 
           {group.highlightIds.length === 0 && groupNotes.length === 0 && (
-            <div className={`drop-hint ${draggingId ? "drop-hint-active" : ""}`}>拖入片段或便签</div>
+            <div className={`drop-hint ${draggingId ? "drop-hint-active" : ""}`}>拖入 Select 或便签</div>
           )}
         </div>
       </SortableContext>
@@ -483,7 +483,7 @@ function VideoStoryCard({
             <Video size={22} />
           </div>
         )}
-        <button type="button" className="story-play" onClick={onSeek} title="预览片段">
+        <button type="button" className="story-play" onClick={onSeek} title="预览 Select">
           <Play size={15} />
         </button>
       </div>
@@ -494,6 +494,10 @@ function VideoStoryCard({
         </div>
         <strong>{speaker || "未命名发言人"}</strong>
         <p>{highlight.text}</p>
+        <div className="story-card-badges">
+          <small>{highlight.status}</small>
+          <small>{highlight.timingSource}</small>
+        </div>
         {highlight.note && <div className="paper-note">{highlight.note}</div>}
       </div>
       <div className="paper-actions">

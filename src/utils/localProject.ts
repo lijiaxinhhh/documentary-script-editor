@@ -1,5 +1,6 @@
 import type { Project, StoryNote } from "../types/transcript";
 import type { FeedbackPayload } from "../types/feedback";
+import { normalizeSelect } from "./selects";
 
 export const localProjectSchema = "documentary-script-editor.local-project";
 export const feedbackExportSchema = "documentary-script-editor.feedback";
@@ -61,23 +62,31 @@ export function restoreLocalProjectFile(raw: unknown, currentProject: Project): 
       text: stringValue(segment.text, ""),
       words: Array.isArray(segment.words) ? segment.words : undefined
     })),
-    highlights: arrayValue(project.highlights).map((highlight, index) => ({
-      id: stringValue(highlight.id, `highlight_${index + 1}`),
-      segmentId: stringValue(highlight.segmentId, ""),
-      assetId: stringValue(highlight.assetId, ""),
-      start: numberValue(highlight.start, 0),
-      end: numberValue(highlight.end, numberValue(highlight.start, 0)),
-      text: stringValue(highlight.text, ""),
-      speakerId: typeof highlight.speakerId === "string" ? highlight.speakerId : undefined,
-      tags: Array.isArray(highlight.tags) ? highlight.tags.map((tag) => String(tag)) : [],
-      note: typeof highlight.note === "string" ? highlight.note : undefined
-    })),
+    highlights: [],
     paperEdit: arrayValue(project.paperEdit).map((group, index) => ({
       id: stringValue(group.id, `group_${index + 1}`),
       title: stringValue(group.title, `段落 ${index + 1}`),
       highlightIds: Array.isArray(group.highlightIds) ? group.highlightIds.map((id) => String(id)) : []
     }))
   };
+  const segmentMap = new Map(restored.segments.map((segment) => [segment.id, segment]));
+  restored.highlights = arrayValue(project.highlights).map((highlight, index) =>
+    normalizeSelect(
+      {
+        ...highlight,
+        id: stringValue(highlight.id, `highlight_${index + 1}`),
+        segmentId: stringValue(highlight.segmentId, ""),
+        assetId: stringValue(highlight.assetId, ""),
+        start: numberValue(highlight.start, 0),
+        end: numberValue(highlight.end, numberValue(highlight.start, 0)),
+        text: stringValue(highlight.text, ""),
+        speakerId: typeof highlight.speakerId === "string" ? highlight.speakerId : undefined,
+        tags: Array.isArray(highlight.tags) ? highlight.tags.map((tag) => String(tag)) : [],
+        note: typeof highlight.note === "string" ? highlight.note : undefined
+      },
+      segmentMap.get(stringValue(highlight.segmentId, ""))
+    )
+  );
 
   const storyNotes = arrayValue(raw.storyNotes).map((note, index) => ({
     id: stringValue(note.id, `note_${index + 1}`),

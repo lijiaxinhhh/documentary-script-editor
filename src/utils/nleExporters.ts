@@ -1,4 +1,5 @@
 import type { Asset, Highlight, Project } from "../types/transcript";
+import { isExportableSelect } from "./selects";
 
 const FPS = 30;
 const FCP_FRAME_DURATION = "100/3000s";
@@ -101,14 +102,10 @@ export function exportDaVinciEdl(project: Project): string {
 
 export function exportNleRelinkGuide(project: Project): string {
   const assets = project.assets.length ? project.assets : [{ id: "offline", fileName: "offline-media.mov" }];
-  const highlights = project.paperEdit.flatMap((group) => group.highlightIds).length
-    ? project.paperEdit.flatMap((group) =>
-        group.highlightIds
-          .map((highlightId) => project.highlights.find((highlight) => highlight.id === highlightId))
-          .filter(Boolean)
-      )
-    : project.highlights;
+  const highlights = timelineSelects(project);
   const duration = highlights.reduce((total, highlight) => total + Math.max(0, (highlight?.end ?? 0) - (highlight?.start ?? 0)), 0);
+  const estimatedCount = highlights.filter((highlight) => highlight?.timingSource === "segment-estimate").length;
+  const reviewCount = highlights.filter((highlight) => highlight && !highlight.reviewed).length;
 
   return [
     `# ${project.name} - 剪辑软件导入说明`,
@@ -118,7 +115,7 @@ export function exportNleRelinkGuide(project: Project): string {
     "- 本地项目 JSON：回到这个网站继续编辑。",
     "- SRT：字幕或文本参考。",
     "- Markdown / CSV：纸剪辑和场记表。",
-    "- FCPXML / XML / EDL：给 Final Cut、Premiere、DaVinci、剪映尝试导入的粗剪交换文件。",
+    "- FCPXML / XML / EDL：给剪辑软件尝试导入的交换文件。",
     "",
     "## 素材重新链接原则",
     "",
@@ -128,23 +125,32 @@ export function exportNleRelinkGuide(project: Project): string {
     "",
     "## 推荐导入顺序",
     "",
-    "1. Final Cut Pro：优先尝试 `_final_cut.fcpxml`。",
-    "2. DaVinci Resolve：优先尝试 `_davinci.fcpxml`，不行再试 `_davinci.edl`。",
-    "3. Premiere Pro：尝试 `_premiere_fcp7.xml`。",
+    "1. Final Cut Pro：优先尝试 `_final_cut.fcpxml`。这是当前最可信的 Beta 路径。",
+    "2. Premiere Pro：尝试 `_premiere_fcp7.xml`，属于实验导出。",
+    "3. DaVinci Resolve：`_davinci.fcpxml` 当前复用 Final Cut exporter，属于实验导出；不行再试 `_davinci.edl`。",
     "4. 剪映 / CapCut：尝试 `_jianying_experimental.fcpxml`，这一路径仍是实验格式。",
     "",
     "## 当前粗剪统计",
     "",
-    `- 视频片段：${project.highlights.length}`,
-    `- 故事版栏目：${project.paperEdit.length}`,
+    `- Paper Edit 片段：${highlights.length}`,
+    `- 结构栏目：${project.paperEdit.length}`,
     `- 粗剪时长约：${formatGuideDuration(duration)}`,
+    `- 估算时间码片段：${estimatedCount}`,
+    `- 需复核片段：${reviewCount}`,
+    "- 时间线假设：1080p、30fps、非 drop-frame；混合帧率、23.976/25/29.97、音频声道尚未自动推断。",
     "",
     "## 导入后请人工确认",
     "",
     "- 时间码是否和网站里的选段一致。",
     "- 是否所有素材都已重新链接。",
     "- 是否有音频缺失、画幅不对或离线媒体。",
-    "- 如果某个软件导入失败，请换用另一个交换格式，并记录失败提示。"
+    "- 如果某个软件导入失败，请换用另一个交换格式，并记录失败提示。",
+    "",
+    "## 当前格式可信度",
+    "",
+    "- Final Cut FCPXML：Beta，主推荐路径。",
+    "- Premiere XML / DaVinci FCPXML / DaVinci EDL / 剪映 FCPXML：Experimental，可尝试导入，但必须人工检查。",
+    "- Rejected selects 默认不进入本导出；只有 Paper Edit 中的非 rejected selects 进入时间线。"
   ].join("\n");
 }
 
@@ -199,10 +205,10 @@ ${spine}
 function timelineClips(project: Project): TimelineClip[] {
   const highlightMap = new Map(project.highlights.map((highlight) => [highlight.id, highlight]));
   const assetMap = new Map(project.assets.map((asset) => [asset.id, asset]));
-  const ordered = project.paperEdit.flatMap((group) => group.highlightIds).map((id) => highlightMap.get(id));
-  const highlights = (ordered.filter(Boolean) as Highlight[]).length
-    ? (ordered.filter(Boolean) as Highlight[])
-    : project.highlights.slice().sort((a, b) => a.start - b.start);
+  const highlights = project.paperEdit
+    .flatMap((group) => group.highlightIds)
+    .map((id) => highlightMap.get(id))
+    .filter(isExportableSelect);
 
   let timelineIn = 0;
   return highlights
@@ -227,6 +233,14 @@ function timelineClips(project: Project): TimelineClip[] {
       timelineIn += duration;
       return clip;
     });
+}
+
+function timelineSelects(project: Project): Highlight[] {
+  const highlightMap = new Map(project.highlights.map((highlight) => [highlight.id, highlight]));
+  return project.paperEdit
+    .flatMap((group) => group.highlightIds)
+    .map((id) => highlightMap.get(id))
+    .filter(isExportableSelect);
 }
 
 function fcp7ClipItem(project: Project, clip: TimelineClip, mediaType: "video" | "audio"): string {

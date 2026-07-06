@@ -5,27 +5,30 @@
 1. 打开本地站点。
 2. 不看 README，确认首屏能理解工具价值和主要下一步。
 3. 点击“载入样例”。
-4. 点击逐字稿里的“播放”“高亮”“入稿”。
-5. 在故事版选择一个模板，并移动一个视频卡片。
-6. 在故事版添加图片资料卡和注释卡，确认卡片不撑破栏目。
-7. 导出“剪辑软件导入说明”，确认文件能下载。
-8. 打开“提交需求”反馈面板。
-9. 空提交应出现错误提示。
-10. 填写表单后应显示本机保存成功。
-11. 检查移动端 390px 宽度无横向滚动。
+4. 在逐字稿里选中文字，点击“播放选中范围”“加入 Selects”“标为 Maybe”“Reject”。
+5. 在 Select Inspector 复核 timecode、timingSource、status、rating、notes，并测试 trim 和 Mark reviewed。
+6. 把 Select 加入 Paper Edit，在 Paper Edit 选择一个模板，并移动一个视频卡片。
+7. 在 Paper Edit 添加图片资料卡和注释卡，确认卡片不撑破栏目。
+8. 打开 Export Assistant，确认 Final Cut FCPXML Beta、NLE guide、Relink manifest 能下载，并看到 Experimental/warning。
+9. 打开“提交需求”反馈面板。
+10. 空提交应出现错误提示。
+11. 填写表单后应显示本机保存成功。
+12. 检查移动端 390px 宽度无横向滚动。
 
 ## Playwright E2E
 
 覆盖路径：
 
 - 首屏出现价值表达、导入视频、载入样例、提交需求。
-- 载入样例后出现逐字稿和故事版。
-- 入稿后故事版出现视频卡片。
-- 故事版可以添加图片资料卡，图片文件名可见。
+- 载入样例后出现逐字稿、Selects Queue、Select Inspector 和 Paper Edit Spine。
+- 加入 Selects 后 Inspector 出现 timecode、duration、timingSource。
+- 没有 words 的文字选段显示 estimated timing / needs review。
+- rejected selects 不进入 Paper Edit / Export，并可恢复为 selected。
+- Paper Edit 可以添加图片资料卡，图片文件名可见。
 - 反馈表单空提交显示错误，填写后成功。
 - 反馈保存后 JSON/CSV 导出按钮可用。
 - 本地项目 JSON 导出能触发下载。
-- 剪辑软件导入说明能触发下载。
+- NLE import guide、Final Cut FCPXML Beta、Relink manifest 能触发下载。
 - 导入无视频的本地项目后，页面提示重新关联视频；选择视频后恢复到文字剪辑就绪状态。
 - 关联视频文件名不一致时显示提示。
 - 载入样例后自动保存最近项目，刷新后可用“最近项目”恢复。
@@ -51,7 +54,7 @@
 
 覆盖对象：
 
-- 剪辑软件导出函数在有高亮时生成时间线内容。
+- 剪辑软件导出函数只根据 Paper Edit 中的非 rejected selects 生成时间线内容。
 - SRT 导出包含发言人和正确字幕顺序。
 - 本地项目导出不会保存浏览器临时视频地址。
 - 本地项目恢复能重新关联同一会话里的视频对象。

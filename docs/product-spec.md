@@ -23,7 +23,7 @@ AI 工具型 Web App。首屏不是营销落地页，而是可直接试用的本
 
 1. 进入网站后理解：这是一个本地优先的纪录片文案剪辑工具。
 2. 明确它如何工作：导入素材或样例，设置转写模型和 Key，得到逐字稿。
-3. 试用核心路径：点击文字跳视频，高亮/入稿，组织故事版。
+3. 试用核心路径：点击文字跳视频，选中文字加入 Selects，在 Inspector 复核后放入 Paper Edit。
 4. 判断适配度：看到故事版模板、导出目标和本地隐私边界。
 5. 提交反馈：描述自己的真实工作流、痛点、理想输出和联系方式。
 6. 保存项目：导出本地项目 JSON，恢复逐字稿、选段、纸剪辑和故事版便签。
@@ -35,19 +35,19 @@ AI 工具型 Web App。首屏不是营销落地页，而是可直接试用的本
 
 ### 初次进入
 
-- 用户看到工具定位：本地素材、转写设置、文字剪视频、故事版、导出工程。
+- 用户看到工具定位：本地素材、转写助手、文字剪视频、Selects 复核、Paper Edit、交换文件导出。
 - 主要 CTA：导入视频、载入样例、提交需求。
 
 ### 试用样例
 
 - 用户点击样例后看到逐字稿和视频字幕路径。
 - 用户点击逐字稿段落，视频字幕随时间码变化。
-- 用户点击高亮/入稿，把片段加入故事版。
+- 用户选中文字加入 Selects，在 Select Inspector 复核 timingSource、状态和 trim 后，把可信选段加入 Paper Edit。
 
 ### 组织结构
 
 - 用户选择宣传片、人物纪录片、纪录短片或纪录长片模板。
-- 用户拖拽视频卡片或使用下拉菜单把片段移动到对应段落。
+- 用户拖拽 Select 卡片或使用下拉菜单把选段移动到对应结构段。
 
 ### 留下反馈
 
@@ -65,11 +65,11 @@ AI 工具型 Web App。首屏不是营销落地页，而是可直接试用的本
 机会 2：用户在文字和视频之间来回找时间码。
 解决方案：逐字稿点击跳视频，视频区同步字幕。
 
-机会 3：用户纸剪辑和故事版割裂。
-解决方案：高亮/入稿生成视频卡片，底部故事版支持模板、便签、拖拽和预览。
+机会 3：用户的 selects 判断、纸剪辑结构和 NLE 时间线容易混在一起。
+解决方案：Transcript 只负责生成 Select / Maybe / Reject；Select Inspector 负责复核；底部 Paper Edit Spine 才决定导出时间线顺序。
 
 机会 4：用户最终还要回到剪辑软件。
-解决方案：导出 SRT、Markdown、CSV、Final Cut、Premiere、DaVinci、剪映实验格式，并提供剪辑软件导入说明，提示素材重新链接和人工检查项。
+解决方案：Export Assistant 主推 Final Cut FCPXML Beta，Premiere / DaVinci / 剪映标记 Experimental，并提供 NLE import guide、Relink manifest、素材重新链接和人工检查项。
 
 机会 5：产品仍需真实需求验证。
 解决方案：内置反馈表单，明确收集“真实流程、卡点、理想输出”。
@@ -81,7 +81,7 @@ AI 工具型 Web App。首屏不是营销落地页，而是可直接试用的本
 解决方案：把最近项目自动保存到本机浏览器，顶部提供“最近项目”恢复入口。
 
 机会 8：用户不知道转写到底有没有开始。
-解决方案：转写面板创建本机任务，检查 localhost:8787 执行层；服务在线时 POST 视频到 `/transcribe`，支持 whisper CLI、mlx_whisper、OpenAI Key 转发、通义/百炼 Qwen3-ASR-Flash 小文件直传、Deepgram 或自定义 `TRANSCRIPTION_COMMAND`，未连接或 runtime 缺失时显示明确错误和重试入口。模型返回 speaker / words 时写回发言人与词级时间戳。
+解决方案：转写助手创建本机任务，检查 localhost:8787 本机助手；服务在线时 POST 视频到 `/transcribe`，支持 whisper CLI、mlx_whisper、OpenAI Key 转发、通义/百炼 Qwen3-ASR-Flash 小文件直传、Deepgram 或自定义 `TRANSCRIPTION_COMMAND`，未连接或 runtime 缺失时显示明确错误和重试入口。模型返回 speaker / words 时写回发言人与词级时间戳；可选 `TRANSCRIPTION_BRIDGE_TOKEN` 配对码。
 
 ## RICE / Kano MVP 范围
 
@@ -90,8 +90,9 @@ AI 工具型 Web App。首屏不是营销落地页，而是可直接试用的本
 - 首屏价值表达和三项核心工作流解释。
 - 样例项目入口。
 - 转写与 Key 设置入口。
-- 点击文字跳视频、高亮、入稿。
-- 故事版模板、视频卡片、图片资料卡、注释卡和时长估算。
+- 点击文字跳视频、创建 Select / Maybe / Reject。
+- Select Inspector：status、rating、notes、reject reason、timingSource、trim、mark reviewed。
+- Paper Edit 模板、视频卡片、图片资料卡、注释卡和时长估算。
 - 反馈表单与基础错误状态。
 - 本地项目 JSON 保存/恢复。
 - 恢复项目后重新关联本地视频。
@@ -99,7 +100,7 @@ AI 工具型 Web App。首屏不是营销落地页，而是可直接试用的本
 - 关联视频的文件名不一致和读取失败提示。
 - 转写任务队列、本机执行层连接状态、runtime 缺失状态。
 - OpenAI Key、通义/百炼 Key、Deepgram Key 转写路径和模型返回发言人的写回。
-- 剪辑软件导入说明导出。
+- Export Assistant、剪辑软件导入说明和 Relink manifest 导出。
 - 反馈 JSON/CSV 导出。
 - 移动端不横向溢出。
 
@@ -125,7 +126,7 @@ AI 工具型 Web App。首屏不是营销落地页，而是可直接试用的本
 ## MVP 成功标准
 
 - 本地可以启动。
-- 用户不看说明也能找到样例、转写设置、入稿和反馈入口。
+- 用户不看说明也能找到样例、转写助手、Selects、Paper Edit 和反馈入口。
 - 核心路径可点击，无明显死路。
 - 表单有可理解的错误状态和成功状态。
 - 构建、单元测试、e2e 测试通过。

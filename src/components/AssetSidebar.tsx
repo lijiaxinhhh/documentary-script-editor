@@ -92,8 +92,11 @@ export function AssetSidebar({
             onChange={(event) => onFilterChange(event.target.value as FilterMode)}
           >
             <option value="all">全部</option>
-            <option value="highlighted">已高亮</option>
-            <option value="paper">已入纸编辑</option>
+            <option value="selected">Selected</option>
+            <option value="maybe">Maybe</option>
+            <option value="needs-review">Needs review</option>
+            <option value="used">Used</option>
+            <option value="rejected">Rejected</option>
             <option value="speaker">按发言人</option>
           </select>
           {filterMode === "speaker" && (

@@ -43,7 +43,10 @@ const project: Project = {
       start: 1,
       end: 3,
       text: "我第一次意识到问题是在那个晚上。",
-      tags: ["opening"]
+      tags: ["opening"],
+      status: "used",
+      timingSource: "manual",
+      reviewed: true
     }
   ],
   paperEdit: [{ id: "opening", title: "开场", highlightIds: ["hl-1"] }]
